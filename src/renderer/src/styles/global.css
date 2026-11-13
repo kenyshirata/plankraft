@@ -2086,3 +2086,30 @@ kbd {
 .level-bar__height input {
   width: 64px;
 }
+
+/* ---------------------------------------------------------------- passeio 3D */
+.viewer3d__walkhud {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 6px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.25));
+}
+.viewer3d__walkhud kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel-2);
+  font: inherit;
+  font-size: 11px;
+}

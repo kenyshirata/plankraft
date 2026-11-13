@@ -6,12 +6,12 @@
  * direito desloca. Atalhos de vista: topo, isométrica, frente, ajustar.
  * Carregado sob demanda (React.lazy) para não pesar a abertura do app.
  */
-import { useEffect, useMemo, useRef } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { Box, Eye, ImageDown, Layers2, Maximize, Scissors, Sun, Tag } from 'lucide-react'
+import { Box, Eye, Footprints, ImageDown, Layers2, Maximize, Scissors, Sun, Tag, X } from 'lucide-react'
 import { useEditorStore } from '@renderer/store/editorStore'
 import { useSettingsStore } from '@renderer/store/settingsStore'
 import { useAssetStore } from '@renderer/store/assetStore'
@@ -20,10 +20,18 @@ import { useResolvedTheme } from '@renderer/theme'
 import { formatNumber } from '@renderer/lib/format'
 import { toast } from '@renderer/store/toastStore'
 import { buildScene, type Scene3D } from './buildScene'
+import { blockers, EYE_HEIGHT, stepWalker, type Walker } from './walk'
 import { resolveMaterial } from '@shared/materials'
 import { getTileCanvas } from '@renderer/lib/textures'
 
 type ViewPreset = 'iso' | 'top' | 'front' | 'fit'
+
+interface WalkStart {
+  x: number
+  z: number
+  ground: number
+  yaw: number
+}
 
 /** Ponte entre a barra de ferramentas (DOM) e a câmera (dentro do Canvas). */
 const cameraBus = new EventTarget()
@@ -37,17 +45,18 @@ export default function Viewer3D(): React.JSX.Element {
   const s = useSettingsStore()
   const theme = useResolvedTheme()
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [walk, setWalk] = useState<WalkStart | null>(null)
 
   const scene = useMemo(
     () =>
       buildScene(doc, {
         wallHeight: s.wallHeight3d,
-        cutHeight: s.cutaway3d ? 1.2 : null,
+        cutHeight: s.cutaway3d && !walk ? 1.2 : null,
         includeImages: s.background3d,
         resolveBlock: (id) => resolveBlock(id, doc),
         image: (key) => assets[key]?.image ?? null
       }),
-    [doc, assets, s.wallHeight3d, s.cutaway3d, s.background3d]
+    [doc, assets, s.wallHeight3d, s.cutaway3d, s.background3d, walk]
   )
 
   // Libera as geometrias antigas quando a cena é reconstruída.
@@ -72,6 +81,24 @@ export default function Viewer3D(): React.JSX.Element {
     toast.success('Imagem 3D exportada.')
   }
 
+  /** Começa o passeio no cômodo selecionado (ou no maior do andar ativo). */
+  const startWalk = (): void => {
+    const ed = useEditorStore.getState()
+    const level = ed.doc.levels.find((l) => l.id === ed.activeLevelId)
+    const elev = (level?.elevation ?? 0) / 100
+    const onLevel = scene.floors.filter((f) => Math.abs(f.elevation - elev) < 1e-3)
+    const pick = onLevel.find((f) => ed.selectedIds.includes(f.id)) ?? [...onLevel].sort((a, b) => b.area - a.area)[0]
+    if (!pick) {
+      toast.info('Desenhe um cômodo neste andar (ou gere uma planta) para começar o passeio.')
+      return
+    }
+    const [cx, cz] = scene.center
+    const dx = cx - pick.center[0]
+    const dz = cz - pick.center[1]
+    const yaw = Math.hypot(dx, dz) > 0.5 ? Math.atan2(-dx, -dz) : 0
+    setWalk({ x: pick.center[0], z: pick.center[1], ground: pick.elevation, yaw })
+  }
+
   const bg = theme === 'dark' ? '#1b1d22' : '#eef1f5'
 
   return (
@@ -84,7 +111,7 @@ export default function Viewer3D(): React.JSX.Element {
         camera={{ fov: 45, near: 0.1, far: 500, position: [10, 10, 10] }}
       >
         <color attach="background" args={[bg]} />
-        <SceneContent scene={scene} shadows={s.shadows3d} labels={s.labels3d} dark={theme === 'dark'} />
+        <SceneContent scene={scene} shadows={s.shadows3d} labels={s.labels3d && !walk} dark={theme === 'dark'} walk={walk} onExit={() => setWalk(null)} />
       </Canvas>
 
       {scene.empty && <div className="viewer3d__empty">Desenhe paredes no 2D (ou gere uma planta) para ver a maquete 3D.</div>}
@@ -101,6 +128,15 @@ export default function Viewer3D(): React.JSX.Element {
         </button>
         <button type="button" className="icon-btn icon-btn--sm" data-tooltip="Ajustar à tela" onClick={() => goTo('fit')}>
           <Maximize size={16} />
+        </button>
+        <button
+          type="button"
+          className={`icon-btn icon-btn--sm${walk ? ' is-on' : ''}`}
+          aria-pressed={!!walk}
+          data-tooltip="Passeio em primeira pessoa"
+          onClick={() => (walk ? setWalk(null) : startWalk())}
+        >
+          <Footprints size={16} />
         </button>
         <span className="toolbar__sep" />
         <button
@@ -159,7 +195,18 @@ export default function Viewer3D(): React.JSX.Element {
           <ImageDown size={16} />
         </button>
       </div>
-      <div className="viewer3d__hint">Arraste para girar · roda para aproximar · botão direito para deslocar</div>
+      {walk ? (
+        <div className="viewer3d__walkhud">
+          <span>
+            <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> andar · <kbd>Shift</kbd> correr · <kbd>←</kbd> <kbd>→</kbd> ou arrastar para olhar
+          </span>
+          <button type="button" className="btn btn--sm" onClick={() => setWalk(null)}>
+            <X size={13} /> Sair (Esc)
+          </button>
+        </div>
+      ) : (
+        <div className="viewer3d__hint">Arraste para girar · roda para aproximar · botão direito para deslocar</div>
+      )}
     </div>
   )
 }
@@ -171,7 +218,21 @@ const ImageDownIcon = (): React.JSX.Element => (
   </svg>
 )
 
-function SceneContent({ scene, shadows, labels, dark }: { scene: Scene3D; shadows: boolean; labels: boolean; dark: boolean }): React.JSX.Element {
+function SceneContent({
+  scene,
+  shadows,
+  labels,
+  dark,
+  walk,
+  onExit
+}: {
+  scene: Scene3D
+  shadows: boolean
+  labels: boolean
+  dark: boolean
+  walk: WalkStart | null
+  onExit: () => void
+}): React.JSX.Element {
   const controls = useRef<OrbitControlsImpl>(null)
   const { camera } = useThree()
   const [cx, cz] = scene.center
@@ -255,16 +316,26 @@ function SceneContent({ scene, shadows, labels, dark }: { scene: Scene3D; shadow
           </Html>
         ))}
 
-      <OrbitControls
-        ref={controls}
-        makeDefault
-        enableDamping
-        dampingFactor={0.12}
-        maxPolarAngle={Math.PI / 2 - 0.04}
-        minDistance={1.5}
-        maxDistance={r * 10}
-        target={[cx, 0, cz]}
-      />
+      {walk && scene.floors.filter((f) => f.topLevel).map((f) => (
+        <mesh key={`ceil-${f.id}`} geometry={f.geometry} position={[0, f.ceilingY - f.elevation, 0]}>
+          <meshStandardMaterial color="#f4f2ee" roughness={1} side={THREE.BackSide} />
+        </mesh>
+      ))}
+
+      {walk ? (
+        <WalkRig scene={scene} start={walk} onExit={onExit} onLeave={() => apply('iso')} />
+      ) : (
+        <OrbitControls
+          ref={controls}
+          makeDefault
+          enableDamping
+          dampingFactor={0.12}
+          maxPolarAngle={Math.PI / 2 - 0.04}
+          minDistance={1.5}
+          maxDistance={r * 10}
+          target={[cx, 0, cz]}
+        />
+      )}
     </>
   )
 }
@@ -344,4 +415,123 @@ function BoxMesh({ b }: { b: Scene3D['boxes'][number] }): React.JSX.Element {
       )}
     </mesh>
   )
+}
+
+// --------------------------------------------------------------- passeio em primeira pessoa
+
+const WALK_SPEED = 1.5
+const RUN_FACTOR = 2.2
+
+/** Câmera na altura dos olhos: WASD/setas, arrastar para olhar, colisão com paredes e escadas. */
+function WalkRig({ scene, start, onExit, onLeave }: { scene: Scene3D; start: WalkStart; onExit: () => void; onLeave: () => void }): null {
+  const { camera, gl } = useThree()
+  const walls = useMemo(() => blockers(scene), [scene])
+  const sceneRef = useRef(scene)
+  sceneRef.current = scene
+  const wallsRef = useRef(walls)
+  wallsRef.current = walls
+  const me = useRef<Walker>({ x: start.x, z: start.z, ground: start.ground })
+  const look = useRef({ yaw: start.yaw, pitch: 0 })
+  const eye = useRef(start.ground + EYE_HEIGHT)
+  const keys = useRef(new Set<string>())
+  const exitRef = useRef(onExit)
+  exitRef.current = onExit
+  const leaveRef = useRef(onLeave)
+  leaveRef.current = onLeave
+
+  useEffect(() => {
+    const cam = camera as THREE.PerspectiveCamera
+    const prev = { fov: cam.fov, near: cam.near }
+    cam.fov = 70
+    cam.near = 0.05
+    cam.rotation.order = 'YXZ'
+    cam.updateProjectionMatrix()
+    return () => {
+      cam.fov = prev.fov
+      cam.near = prev.near
+      cam.rotation.order = 'XYZ'
+      cam.updateProjectionMatrix()
+      leaveRef.current()
+    }
+  }, [camera])
+
+  useEffect(() => {
+    const typing = (t: EventTarget | null): boolean => t instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)
+    const MOVE = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'])
+    const down = (e: KeyboardEvent): void => {
+      if (typing(e.target)) return
+      if (e.code === 'Escape') {
+        e.stopImmediatePropagation()
+        exitRef.current()
+        return
+      }
+      if (MOVE.has(e.code) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // Evita que W/A/S/D acionem as ferramentas do editor enquanto se anda.
+        e.stopImmediatePropagation()
+        e.preventDefault()
+        keys.current.add(e.code)
+      }
+    }
+    const up = (e: KeyboardEvent): void => void keys.current.delete(e.code)
+    const blur = (): void => keys.current.clear()
+    window.addEventListener('keydown', down, true)
+    window.addEventListener('keyup', up, true)
+    window.addEventListener('blur', blur)
+    return () => {
+      window.removeEventListener('keydown', down, true)
+      window.removeEventListener('keyup', up, true)
+      window.removeEventListener('blur', blur)
+    }
+  }, [])
+
+  useEffect(() => {
+    const el = gl.domElement
+    let drag = false
+    const onDown = (e: PointerEvent): void => {
+      drag = true
+      el.setPointerCapture(e.pointerId)
+    }
+    const onMove = (e: PointerEvent): void => {
+      if (!drag) return
+      look.current.yaw -= e.movementX * 0.0035
+      look.current.pitch = Math.max(-1.3, Math.min(1.3, look.current.pitch - e.movementY * 0.0035))
+    }
+    const onUp = (e: PointerEvent): void => {
+      drag = false
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId)
+    }
+    el.addEventListener('pointerdown', onDown)
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', onUp)
+    return () => {
+      el.removeEventListener('pointerdown', onDown)
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', onUp)
+    }
+  }, [gl])
+
+  useFrame((_, dt) => {
+    const k = keys.current
+    const l = look.current
+    const d = Math.min(dt, 0.1)
+    if (k.has('ArrowLeft')) l.yaw += 1.8 * d
+    if (k.has('ArrowRight')) l.yaw -= 1.8 * d
+    const fwd = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0)
+    const side = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0)
+    if (fwd || side) {
+      const speed = WALK_SPEED * (k.has('ShiftLeft') || k.has('ShiftRight') ? RUN_FACTOR : 1) * d
+      const sin = Math.sin(l.yaw)
+      const cos = Math.cos(l.yaw)
+      // frente = (−sin, −cos); direita = (cos, −sin)
+      const dx = (-sin * fwd + cos * side) * speed
+      const dz = (-cos * fwd - sin * side) * speed
+      me.current = stepWalker(me.current, dx, dz, sceneRef.current, wallsRef.current)
+    }
+    // Suaviza a subida/descida (escadas) e o olhar.
+    eye.current += (me.current.ground + EYE_HEIGHT - eye.current) * Math.min(1, d * 12)
+    camera.position.set(me.current.x, eye.current, me.current.z)
+    camera.rotation.set(l.pitch, l.yaw, 0)
+    if (import.meta.env.DEV) (window as unknown as { __walk: unknown }).__walk = { ...me.current, yaw: l.yaw, eye: eye.current }
+  })
+  return null
 }

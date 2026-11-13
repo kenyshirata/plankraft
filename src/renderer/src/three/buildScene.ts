@@ -43,6 +43,9 @@ export interface FloorPiece {
   slab?: THREE.BufferGeometry
   /** Altura (m) do piso do andar, para posicionar rótulos. */
   elevation: number
+  /** Altura (m) do teto do cômodo; só o último andar recebe teto no passeio. */
+  ceilingY: number
+  topLevel: boolean
   color: string
   texture?: string
   name: string
@@ -67,7 +70,17 @@ export interface ImagePiece {
   opacity: number
 }
 
+/** Escada para o passeio: contorno (x, z em m), piso de partida e altura vencida. */
+export interface StairPiece {
+  quad: [number, number][]
+  elevation: number
+  height: number
+}
+
 export interface Scene3D {
+  stairs: StairPiece[]
+  /** Cotas (m) dos pisos dos andares. */
+  levelElevations: number[]
   boxes: BoxPiece[]
   floors: FloorPiece[]
   furniture: FurniturePiece[]
@@ -208,6 +221,7 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   const floors: FloorPiece[] = []
   const furniture: FurniturePiece[] = []
   const images: ImagePiece[] = []
+  const stairs: StairPiece[] = []
 
   const levelObjects = (levelId: Id): PlanDocument['objects'] => {
     const ids = new Set(doc.layers.filter((l) => l.visible && l.levelId === levelId).map((l) => l.id))
@@ -332,6 +346,8 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
       geometry,
       slab,
       elevation: yOff,
+      ceilingY: yOff + wallH,
+      topLevel: isTop,
       color: mat && !mat.pattern ? mat.color : r.color,
       texture: mat?.pattern ? mat.id : undefined,
       name: r.name,
@@ -360,6 +376,7 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
         furniture.push({ geometry: g, color: b.fill ?? '#cdbfa8' })
       }
       pts2d.push(tl, tr, br, bl)
+      stairs.push({ quad: [tl, tr, br, bl].map((q) => [q.x * M, q.y * M] as [number, number]), elevation: yOff, height: levelH })
       continue
     }
     const style = STYLES[def.id] ?? DEFAULT_STYLE
@@ -413,6 +430,8 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   const minZ = empty ? -4 : Math.min(...zs)
   const maxZ = empty ? 4 : Math.max(...zs)
   return {
+    stairs,
+    levelElevations: doc.levels.map((l) => l.elevation * M),
     boxes,
     floors,
     furniture,
