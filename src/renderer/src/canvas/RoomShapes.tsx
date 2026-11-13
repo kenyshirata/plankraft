@@ -1,6 +1,6 @@
 import { Group, Line, Text } from 'react-konva'
 import type { Id, LengthUnit, RoomObject } from '@shared/model'
-import { polygonArea, polygonCentroid } from '@renderer/lib/geometry'
+import { insetPolygon, polygonArea, polygonCentroid } from '@renderer/lib/geometry'
 import { formatArea } from '@renderer/lib/format'
 import type { CanvasPalette } from '@renderer/theme'
 import { resolveMaterial } from '@shared/materials'
@@ -29,17 +29,19 @@ export function RoomShapes({ rooms, palette, scale, selected, hoveredId, unit, p
   const hair = 1 / scale
   return (
     <>
-      {part !== 'labels' && rooms.map((r) => {
+      {part !== 'labels' && [...rooms].sort((a, b) => Number(b.zone === 'lot') - Number(a.zone === 'lot')).map((r) => {
         const isSel = selected.has(r.id)
         const isHover = !isSel && hoveredId === r.id
         const mat = resolveMaterial(r.material)
         const tile = mat ? getTileCanvas(mat.id) : null
         const k = mat?.tileCm ? mat.tileCm / TILE_PX : 1
         // Com acabamento o piso aparece quase opaco; sem ele, fica como tinta translúcida.
-        const baseOpacity = mat ? 0.9 : 0.24
+        const baseOpacity = r.zone === 'lot' ? 0.3 : r.zone === 'pool' ? 0.75 : mat ? 0.9 : 0.24
+        const flat = r.points.flatMap((p) => [p.x, p.y])
+        const setback = r.zone === 'lot' && r.setback ? insetPolygon(r.points, r.setback) : null
         return (
+          <Group key={r.id}>
           <Line
-            key={r.id}
             id={r.id}
             name="plan-object"
             points={r.points.flatMap((p) => [p.x, p.y])}
@@ -54,6 +56,22 @@ export function RoomShapes({ rooms, palette, scale, selected, hoveredId, unit, p
             dash={isSel ? undefined : [6 * hair, 4 * hair]}
             perfectDrawEnabled={false}
           />
+          {r.zone === 'lot' && (
+            // Divisa do terreno: traço-ponto sempre visível (a opacidade do preenchimento não a apaga).
+            <Line points={flat} closed stroke="#6b5d1f" strokeWidth={2 * hair} dash={[16 * hair, 5 * hair, 3 * hair, 5 * hair]} listening={false} perfectDrawEnabled={false} />
+          )}
+          {setback && (
+            <Line
+              points={setback.flatMap((p) => [p.x, p.y])}
+              closed
+              stroke="#e8590c"
+              strokeWidth={1.5 * hair}
+              dash={[8 * hair, 5 * hair]}
+              listening={false}
+              perfectDrawEnabled={false}
+            />
+          )}
+          </Group>
         )
       })}
       {part !== 'fill' && rooms.map((r) => {

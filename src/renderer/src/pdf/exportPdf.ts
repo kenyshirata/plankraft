@@ -31,6 +31,7 @@ import { resolveMaterial } from '@shared/materials'
 import { computeWallGeometry, extendedPoints } from '@renderer/canvas/wallGeometry'
 import { openingGeometry } from '@renderer/lib/openings'
 import { openingPrims } from '@renderer/lib/openingSymbols'
+import { insetPolygon } from '@renderer/lib/geometry'
 import { planarFaces } from '@renderer/lib/rooms'
 import { cornerAngles, exteriorSides, layoutDimensions, measuredSegment } from '@renderer/lib/dimensions'
 import { blockCorners, instanceMatrix, transformShape } from '@renderer/lib/blockGeometry'
@@ -398,7 +399,11 @@ function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptio
 
   function drawRoomFill(o: RoomObject): void {
     const mat = resolveMaterial(o.material)
-    withOpacity(mat ? 0.6 : 0.2, () => fillPath(o.points, mat?.color ?? o.color))
+    withOpacity(o.zone === 'lot' ? 0.25 : mat ? 0.6 : o.zone === 'pool' ? 0.7 : 0.2, () => fillPath(o.points, mat?.color ?? o.color))
+    if (o.zone === 'lot') {
+      strokePath(o.points, true, COLORS.ink, 0.35, [3, 0.8, 0.6, 0.8])
+      if (o.setback) strokePath(insetPolygon(o.points, o.setback), true, COLORS.dim, 0.2, [1.6, 1])
+    }
   }
 
   function drawRoomLabel(o: RoomObject): void {
@@ -550,7 +555,7 @@ function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptio
   // ================================================================ anotações
 
   function drawLegend(r: Rect): void {
-    const rooms = objects.filter((o): o is RoomObject => o.type === 'room')
+    const rooms = objects.filter((o): o is RoomObject => o.type === 'room' && o.zone !== 'lot')
     pdf.setDrawColor(COLORS.frame)
     pdf.setLineWidth(0.25)
     pdf.rect(r.x, r.y, r.width, r.height)

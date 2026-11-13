@@ -25,6 +25,8 @@ import { AiSettings } from './AiSettings'
 import { openRecognize } from './RecognizeDialog'
 import { MaterialSwatch } from './MaterialsPanel'
 import { resolveMaterial } from '@shared/materials'
+import { ZONES, ZONE_ORDER } from '@shared/zones'
+import type { RoomZone } from '@shared/model'
 import { DOOR_VARIANTS, WINDOW_VARIANTS } from '@renderer/lib/openingSymbols'
 import { WINDOW_HEIGHT_DEFAULT, WINDOW_SILL_DEFAULT } from '@shared/model'
 import { applyMaterial } from '@renderer/store/materialActions'
@@ -187,7 +189,7 @@ function Properties(): React.JSX.Element {
 
 function DocumentSummary({ objects, unit, precision }: { objects: PlanObject[]; unit: LengthUnit; precision: Precision }): React.JSX.Element {
   const walls = objects.filter((o): o is WallObject => o.type === 'wall')
-  const rooms = objects.filter((o): o is RoomObject => o.type === 'room')
+  const rooms = objects.filter((o): o is RoomObject => o.type === 'room' && !o.zone)
   const count = (t: PlanObject['type']): number => objects.filter((o) => o.type === t).length
   return (
     <div className="empty-state">
@@ -256,6 +258,26 @@ function WallProps({ wall, unit, precision }: { wall: WallObject; unit: LengthUn
           suffix="cm"
           onCommit={(v) => commit((d) => updateObject(d, wall.id, 'wall', (o) => ({ ...o, thickness: v })))}
         />
+      </Field>
+      <Field label="Altura">
+        <div className="button-row">
+          <NumberField
+            value={wall.height ?? 270}
+            min={20}
+            max={600}
+            suffix="cm"
+            onCommit={(v) => commit((d) => updateObject(d, wall.id, 'wall', (o) => ({ ...o, height: v })))}
+          />
+          <button type="button" className="btn btn--sm" data-tooltip="Pé-direito do andar" onClick={() => setWallHeight(wall.id, undefined)}>
+            Padrão
+          </button>
+          <button type="button" className="btn btn--sm" data-tooltip="Cerca de 1,20 m" onClick={() => setWallHeight(wall.id, 120)}>
+            Cerca
+          </button>
+          <button type="button" className="btn btn--sm" data-tooltip="Muro de 2,00 m" onClick={() => setWallHeight(wall.id, 200)}>
+            Muro
+          </button>
+        </div>
       </Field>
       <MaterialField id={wall.material} label="Acabamento" />
       <Field label="Ângulo">
@@ -380,10 +402,23 @@ function RoomProps({ room, unit, precision }: { room: RoomObject; unit: LengthUn
           ))}
         </div>
       </Field>
+      <Field label="Tipo de área">
+        <select className="select" value={room.zone ?? ''} onChange={(e) => setRoomZone(room.id, (e.target.value || null) as RoomZone | null)}>
+          <option value="">Ambiente interno</option>
+          {ZONE_ORDER.map((z) => (
+            <option key={z} value={z}>
+              {ZONES[z].label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {room.zone === 'lot' && <LotInfo room={room} unit={unit} precision={precision} />}
       <MaterialField id={room.material} label="Piso" />
-      <button type="button" className="btn btn--block" onClick={() => refreshRoomFromWalls(room.id)}>
-        <RefreshCw size={14} /> Atualizar pelas paredes
-      </button>
+      {!room.zone && (
+        <button type="button" className="btn btn--block" onClick={() => refreshRoomFromWalls(room.id)}>
+          <RefreshCw size={14} /> Atualizar pelas paredes
+        </button>
+      )}
     </>
   )
 }
@@ -406,6 +441,62 @@ function MaterialField({ id, label }: { id: string | undefined; label: string })
         )}
       </div>
     </Field>
+  )
+}
+
+/** Terreno: recuo e taxa de ocupação (área dos cômodos internos do mesmo andar ÷ área do terreno). */
+function LotInfo({ room, unit, precision }: { room: RoomObject; unit: LengthUnit; precision: Precision }): React.JSX.Element {
+  const objects = useEditorStore((s) => s.doc.objects)
+  const layers = useEditorStore((s) => s.doc.layers)
+  const level = layers.find((l) => l.id === room.layerId)?.levelId
+  const ids = new Set(layers.filter((l) => l.levelId === level).map((l) => l.id))
+  const built = objects
+    .filter((o): o is RoomObject => o.type === 'room' && !o.zone && ids.has(o.layerId))
+    .reduce((s, r) => s + polygonArea(r.points), 0)
+  const lot = polygonArea(room.points)
+  return (
+    <>
+      <Field label="Recuo">
+        <NumberField
+          value={room.setback ?? 0}
+          min={0}
+          max={2000}
+          suffix="cm"
+          onCommit={(v) => commit((d) => updateObject(d, room.id, 'room', (r) => ({ ...r, setback: v })))}
+        />
+      </Field>
+      <Field label="Área construída">
+        <span className="readout">{formatArea(built, unit, precision)}</span>
+      </Field>
+      <Field label="Ocupação">
+        <span className="readout readout--strong">{lot > 0 ? `${Math.round((built / lot) * 100)}%` : '—'}</span>
+      </Field>
+    </>
+  )
+}
+
+function setWallHeight(id: string, height: number | undefined): void {
+  commit((d) =>
+    updateObject(d, id, 'wall', (o) => {
+      const { height: _h, ...rest } = o
+      void _h
+      return height === undefined ? rest : { ...rest, height }
+    })
+  )
+}
+
+function setRoomZone(id: string, zone: RoomZone | null): void {
+  commit((d) =>
+    updateObject(d, id, 'room', (r) => {
+      const { zone: _z, material: _m, setback: _s, ...rest } = r
+      void _z
+      void _m
+      void _s
+      if (!zone) return rest
+      const def = ZONES[zone]
+      const renamed = /^Cômodo \d+$/.test(r.name) ? def.label : r.name
+      return { ...rest, name: renamed, zone, color: def.color, ...(def.material ? { material: def.material } : {}) }
+    })
   )
 }
 

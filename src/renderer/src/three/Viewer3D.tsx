@@ -88,7 +88,7 @@ export default function Viewer3D(): React.JSX.Element {
     const ed = useEditorStore.getState()
     const level = ed.doc.levels.find((l) => l.id === ed.activeLevelId)
     const elev = (level?.elevation ?? 0) / 100
-    const onLevel = scene.floors.filter((f) => Math.abs(f.elevation - elev) < 1e-3)
+    const onLevel = scene.floors.filter((f) => !f.zone && Math.abs(f.elevation - elev) < 1e-3)
     const pick = onLevel.find((f) => ed.selectedIds.includes(f.id)) ?? [...onLevel].sort((a, b) => b.area - a.area)[0]
     if (!pick) {
       toast.info('Desenhe um cômodo neste andar (ou gere uma planta) para começar o passeio.')
@@ -337,7 +337,7 @@ function SceneContent({
           </Html>
         ))}
 
-      {walk && scene.floors.filter((f) => f.topLevel).map((f) => (
+      {walk && scene.floors.filter((f) => f.topLevel && !f.zone).map((f) => (
         <mesh key={`ceil-${f.id}`} geometry={f.geometry} position={[0, f.ceilingY - f.elevation, 0]}>
           <meshStandardMaterial color="#f4f2ee" roughness={1} side={THREE.BackSide} />
         </mesh>
@@ -412,7 +412,13 @@ function FloorMesh({ f }: { f: Scene3D['floors'][number] }): React.JSX.Element {
   return (
     <>
       <mesh geometry={f.geometry} position={[0, 0.003, 0]} receiveShadow>
-        <meshStandardMaterial color={map ? '#ffffff' : f.color} map={map} roughness={0.9} side={THREE.DoubleSide} />
+        <meshStandardMaterial
+          color={map ? '#ffffff' : f.color}
+          map={map}
+          roughness={f.zone === 'pool' ? 0.12 : 0.9}
+          metalness={f.zone === 'pool' ? 0.25 : 0}
+          side={THREE.DoubleSide}
+        />
       </mesh>
       {f.slab && (
         <mesh geometry={f.slab} castShadow receiveShadow>

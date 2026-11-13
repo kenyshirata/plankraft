@@ -15,6 +15,8 @@
 import * as THREE from 'three'
 import type { BlockDef, BlockShape } from '@shared/blocks'
 import { WINDOW_HEIGHT_DEFAULT, WINDOW_SILL_DEFAULT } from '@shared/model'
+import { ZONES } from '@shared/zones'
+import type { RoomZone } from '@shared/model'
 import type { BlockObject, DoorObject, Id, ImageObject, OpeningObject, PlanDocument, RoomObject, WallObject, WindowObject } from '@shared/model'
 import { distance, normalize, perp, pointInPolygon, polygonArea, polygonCentroid, sub } from '@renderer/lib/geometry'
 import { computeWallGeometry } from '@renderer/canvas/wallGeometry'
@@ -44,6 +46,8 @@ export interface FloorPiece {
   slab?: THREE.BufferGeometry
   /** Altura (m) do piso do andar, para posicionar rótulos. */
   elevation: number
+  /** Área externa (terreno, gramado…): sem teto, sem laje. */
+  zone?: RoomZone
   /** Altura (m) do teto do cômodo; só o último andar recebe teto no passeio. */
   ceilingY: number
   topLevel: boolean
@@ -154,6 +158,8 @@ const STYLES: Record<string, FurnitureStyle> = {
   'builtin:garden-chair': { base: 0.45, byIndex: [0.45, 0.85], color: '#a3b48f' },
   'builtin:lounger': { base: 0.35, color: '#a3b48f' },
   'builtin:bbq': { base: 0.9, detail: 0.92, color: '#8d8f93' },
+  'builtin:garden-bench': { base: 0.45, detail: 0.85, color: '#a8794a' },
+  'builtin:car': { base: 1.0, byIndex: [1.0, 1.35, 1.1, 1.0, 1.0, 0.1, 0.1], color: '#7d8fa3' },
   'builtin:pillar-rect': { base: 2.7, color: '#cfcac2' },
   'builtin:pillar-round': { base: 2.7, color: '#cfcac2' },
   'builtin:circle': { base: 0.5, color: '#d6d2cb' },
@@ -267,8 +273,10 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   const H = opts.cutHeight !== null ? Math.min(opts.cutHeight, wallH) : wallH
   if (isTop && walls.length) {
     roofBase = yOff + wallH
-    const xsW = walls.flatMap((w) => [w.a.x, w.b.x])
-    const zsW = walls.flatMap((w) => [w.a.y, w.b.y])
+    // Muros e cercas baixos não entram na caixa do telhado.
+    const bodyWalls = walls.filter((w) => !w.height || w.height >= wallH * 100 - 1)
+    const xsW = (bodyWalls.length ? bodyWalls : walls).flatMap((w) => [w.a.x, w.b.x])
+    const zsW = (bodyWalls.length ? bodyWalls : walls).flatMap((w) => [w.a.y, w.b.y])
     const th = Math.max(...walls.map((w) => w.thickness)) / 2
     roofBox = { x0: (Math.min(...xsW) - th) * M, z0: (Math.min(...zsW) - th) * M, x1: (Math.max(...xsW) + th) * M, z1: (Math.max(...zsW) + th) * M }
   }
@@ -278,6 +286,8 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
     const g = geo.get(w.id)
     if (!g) continue
     const len = distance(w.a, w.b)
+    // Muros e cercas: altura própria, limitada ao pé-direito.
+    const Hw = w.height ? Math.min(H, w.height / 100) : H
     if (len < 1) continue
     const dir = normalize(sub(w.b, w.a))
     const nrm = perp(dir)
@@ -316,11 +326,11 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
     let cursor = s0
     for (const op of ops) {
       if (op.from < cursor) continue // aberturas sobrepostas: ignora a segunda
-      piece(cursor, op.from, 0, H)
+      piece(cursor, op.from, 0, Hw)
       if (op.o.type === 'door') {
-        if (H > DOOR_HEIGHT) piece(op.from, op.to, DOOR_HEIGHT, H)
+        if (Hw > DOOR_HEIGHT) piece(op.from, op.to, DOOR_HEIGHT, Hw)
         const d = op.o as DoorObject
-        const doorH = Math.min(DOOR_HEIGHT, H)
+        const doorH = Math.min(DOOR_HEIGHT, Hw)
         const variant = d.variant ?? 'swing'
         /** Folha aberta a 90° (como no símbolo 2D): dobradiça em `hingeS`, comprimento `leafLen`. */
         const swingLeaf = (hingeAt: 'start' | 'end', leafLen: number): void => {
@@ -362,8 +372,8 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
         // 'open' (vão livre): sem folha.
       } else {
         const win = op.o as WindowObject
-        const sill = Math.min(((win.sill ?? WINDOW_SILL_DEFAULT) / 100), H)
-        const top = Math.min(sill + (win.height ?? WINDOW_HEIGHT_DEFAULT) / 100, H)
+        const sill = Math.min(((win.sill ?? WINDOW_SILL_DEFAULT) / 100), Hw)
+        const top = Math.min(sill + (win.height ?? WINDOW_HEIGHT_DEFAULT) / 100, Hw)
         piece(op.from, op.to, 0, sill)
         if (top > sill) {
           if (win.variant === 'sliding') {
@@ -375,23 +385,27 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
             piece(op.from, op.to, sill, top, 'glass', t * 0.3, '#9ec9e8')
           }
         }
-        if (H > top) piece(op.from, op.to, top, H)
+        if (Hw > top) piece(op.from, op.to, top, Hw)
       }
       cursor = op.to
     }
-    piece(cursor, s1, 0, H)
+    piece(cursor, s1, 0, Hw)
   }
 
   // ---- pisos (com furo para a escada que vem de baixo)
   const below = li > 0 ? (stairsByLevel.get(doc.levels[li - 1].id) ?? []) : []
   for (const r of objects.filter((o): o is RoomObject => o.type === 'room')) {
-    const holes = below.filter((q) => pointInPolygon(polygonCentroid(q), r.points))
+    const zone = r.zone
+    const holes = zone ? [] : below.filter((q) => pointInPolygon(polygonCentroid(q), r.points))
     const shape = toShape(r.points, holes)
-    const geometry = new THREE.ShapeGeometry(shape)
+    const zoneH = zone ? ZONES[zone].height : 0
+    // Terreno: chapa fina logo abaixo dos pisos; demais áreas externas ganham espessura.
+    const geometry: THREE.BufferGeometry =
+      zone && zoneH > 0 ? new THREE.ExtrudeGeometry(shape, { depth: zoneH, bevelEnabled: false }) : new THREE.ShapeGeometry(shape)
     geometry.rotateX(-Math.PI / 2)
-    geometry.translate(0, yOff, 0)
+    geometry.translate(0, yOff + (zone === 'lot' ? -0.002 : 0), 0)
     let slab: THREE.BufferGeometry | undefined
-    if (li > 0) {
+    if (li > 0 && !zone) {
       slab = new THREE.ExtrudeGeometry(shape, { depth: SLAB, bevelEnabled: false })
       slab.rotateX(-Math.PI / 2)
       slab.translate(0, yOff - SLAB, 0)
@@ -403,6 +417,7 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
       id: r.id,
       geometry,
       slab,
+      zone,
       elevation: yOff,
       ceilingY: yOff + wallH,
       topLevel: isTop,
@@ -418,6 +433,24 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   for (const b of objects.filter((o): o is BlockObject => o.type === 'block')) {
     const def = opts.resolveBlock(b.blockId)
     if (!def) continue
+    if (def.id === 'builtin:tree' || def.id === 'builtin:tree-small' || def.id === 'builtin:shrub') {
+      // Vegetação: tronco + copa esférica, no tamanho do símbolo (escala incluída).
+      const c = apply(instanceMatrix(b, def), { x: def.width / 2, y: def.height / 2 })
+      const r = (def.width * Math.max(b.scaleX, b.scaleY)) / 2 * M
+      const shrub = def.id === 'builtin:shrub'
+      const trunkH = shrub ? 0 : Math.max(0.5, r * 1.1)
+      if (!shrub) {
+        const trunk = new THREE.CylinderGeometry(r * 0.07, r * 0.1, trunkH, 8)
+        trunk.translate(c.x * M, yOff + trunkH / 2, c.y * M)
+        furniture.push({ geometry: trunk, color: '#7a5a3a' })
+      }
+      const canopy = new THREE.IcosahedronGeometry(shrub ? r : r * 0.85, 1)
+      canopy.scale(1, shrub ? 0.7 : 0.9, 1)
+      canopy.translate(c.x * M, yOff + (shrub ? r * 0.65 : trunkH + r * 0.55), c.y * M)
+      furniture.push({ geometry: canopy, color: b.fill ?? (shrub ? '#5c9a4a' : '#4f8f3d') })
+      pts2d.push({ x: c.x - r / M, y: c.y - r / M }, { x: c.x + r / M, y: c.y + r / M })
+      continue
+    }
     if (def.id.startsWith(STAIR_PREFIX)) {
       // Escada: degraus subindo até o piso do andar de cima.
       const [tl, tr, br, bl] = stairQuad(b, def)

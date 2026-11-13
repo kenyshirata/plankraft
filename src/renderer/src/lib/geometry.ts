@@ -198,3 +198,23 @@ export function boundsOf(points: Point[]): Rect | null {
   }
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
 }
+
+/**
+ * Desloca o polígono `d` cm para dentro (cada aresta paralela a si mesma; cantos em esquadro/mitra).
+ * Serve para o recuo do terreno; polígonos muito côncavos ou menores que 2·d podem se cruzar.
+ */
+export function insetPolygon(points: Point[], d: number): Point[] {
+  const n = points.length
+  if (n < 3 || d <= 0) return points
+  // y para baixo: área com sinal positiva = horário na tela; a normal "para dentro" depende disso.
+  const sign = signedArea(points) > 0 ? 1 : -1
+  const dirs = points.map((p, i) => normalize(sub(points[(i + 1) % n], p)))
+  // Normal para dentro de cada aresta (i: points[i] → points[i+1]).
+  const inward = dirs.map((v) => ({ x: -v.y * sign, y: v.x * sign }))
+  return points.map((p, i) => {
+    const prev = (i + n - 1) % n
+    const a = add(p, mul(inward[prev], d))
+    const b = add(p, mul(inward[i], d))
+    return lineIntersection(a, dirs[prev], b, dirs[i]) ?? add(p, mul(inward[i], d))
+  })
+}

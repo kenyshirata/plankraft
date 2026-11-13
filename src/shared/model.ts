@@ -61,6 +61,9 @@ interface BaseObject {
   layerId: Id
 }
 
+/** Tipo de área de um "cômodo": ausente = ambiente interno; os demais são áreas externas. */
+export type RoomZone = 'lot' | 'lawn' | 'deck' | 'paving' | 'pool'
+
 export interface WallObject extends BaseObject {
   type: 'wall'
   /** Extremidades no eixo (linha de centro) da parede, em cm. */
@@ -70,6 +73,8 @@ export interface WallObject extends BaseObject {
   thickness: number
   /** Acabamento (id de shared/materials.ts); ausente = cor padrão. */
   material?: string
+  /** Altura (cm); ausente = pé-direito do andar. Muros e cercas usam alturas menores. */
+  height?: number
 }
 
 /**
@@ -122,6 +127,10 @@ export interface RoomObject extends BaseObject {
   color: string
   /** Piso/acabamento (id de shared/materials.ts); ausente = só a cor do cômodo. */
   material?: string
+  /** Área externa (terreno, gramado, deck, calçada, piscina); ausente = ambiente interno. */
+  zone?: RoomZone
+  /** Terreno: recuo obrigatório (cm) desenhado para dentro da divisa. */
+  setback?: number
 }
 
 export interface TextObject extends BaseObject {

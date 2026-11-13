@@ -19,6 +19,7 @@ import {
   type ProjectFile
 } from './model'
 import { normalizeBlockDef, type BlockDef } from './blocks'
+import { isZone } from './zones'
 
 export function serializeProject(doc: PlanDocument): string {
   // Só embute definições de blocos que algum objeto ainda usa.
@@ -60,7 +61,16 @@ function normalizeObject(v: unknown, layerIds: Set<string>, fallbackLayer: strin
       const a = point(v.a)
       const b = point(v.b)
       return a && b
-        ? { id, layerId, type: 'wall', a, b, thickness: Math.max(1, num(v.thickness, 15)), ...(typeof v.material === 'string' ? { material: v.material } : {}) }
+        ? {
+            id,
+            layerId,
+            type: 'wall',
+            a,
+            b,
+            thickness: Math.max(1, num(v.thickness, 15)),
+            ...(typeof v.material === 'string' ? { material: v.material } : {}),
+            ...(typeof v.height === 'number' && Number.isFinite(v.height) ? { height: Math.min(600, Math.max(20, v.height)) } : {})
+          }
         : null
     }
     case 'door':
@@ -89,7 +99,9 @@ function normalizeObject(v: unknown, layerIds: Set<string>, fallbackLayer: strin
             name: str(v.name, 'Cômodo'),
             points: pts,
             color: str(v.color, '#7aa2ff'),
-            ...(typeof v.material === 'string' ? { material: v.material } : {})
+            ...(typeof v.material === 'string' ? { material: v.material } : {}),
+            ...(isZone(v.zone) ? { zone: v.zone } : {}),
+            ...(typeof v.setback === 'number' && Number.isFinite(v.setback) ? { setback: Math.min(2000, Math.max(0, v.setback)) } : {})
           }
         : null
     }

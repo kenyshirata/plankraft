@@ -125,6 +125,11 @@ export const BUILTIN_BLOCKS: BlockDef[] = [
   def('bbq', 'Churrasqueira', 'Área externa', 100, 60, [R(0, 0, 100, 60, { r: 2 }), R(10, 8, 80, 40, { fill: 'none' }), ...[18, 26, 34, 42, 50, 58, 66, 74, 82].map((x) => L(x, 10, x, 46, { weight: 0.5 }))]),
 
   // ---------------------------------------------------------------- Genéricos
+  def('tree', 'Árvore', 'Jardim', 300, 300, [E(150, 150, 150, 150, { dash: true }), E(150, 150, 24, 24, { fill: 'ink' }), L(150, 150, 60, 80, { weight: 0.4 }), L(150, 150, 240, 90, { weight: 0.4 }), L(150, 150, 210, 250, { weight: 0.4 }), L(150, 150, 80, 230, { weight: 0.4 })]),
+  def('tree-small', 'Árvore pequena', 'Jardim', 160, 160, [E(80, 80, 80, 80, { dash: true }), E(80, 80, 14, 14, { fill: 'ink' }), L(80, 80, 30, 40, { weight: 0.4 }), L(80, 80, 130, 50, { weight: 0.4 }), L(80, 80, 110, 135, { weight: 0.4 })]),
+  def('shrub', 'Arbusto', 'Jardim', 80, 80, [E(40, 40, 40, 40, { dash: true }), E(40, 40, 22, 22, { fill: 'none' }), E(40, 40, 8, 8, { fill: 'none' })]),
+  def('garden-bench', 'Banco de jardim', 'Jardim', 150, 45, [R(0, 0, 150, 45, { r: 4 }), R(0, 0, 150, 12, { r: 3 }), L(0, 24, 150, 24, { weight: 0.5 }), L(0, 34, 150, 34, { weight: 0.5 })]),
+  def('car', 'Carro', 'Jardim', 180, 450, [R(0, 0, 180, 450, { r: 36 }), R(20, 110, 140, 90, { r: 14 }), R(20, 210, 140, 100, { r: 10 }), R(26, 316, 128, 60, { r: 14 }), R(6, 70, 20, 40, { r: 6, fill: 'ink' }), R(154, 70, 20, 40, { r: 6, fill: 'ink' })]),
   def('pillar-rect', 'Pilar quadrado', 'Estrutura', 30, 30, [R(0, 0, 30, 30), L(0, 0, 30, 30, { weight: 0.5 }), L(30, 0, 0, 30, { weight: 0.5 })]),
   def('pillar-round', 'Pilar redondo', 'Estrutura', 30, 30, [E(15, 15, 15, 15), L(3, 3, 27, 27, { weight: 0.5 }), L(27, 3, 3, 27, { weight: 0.5 })]),
   def('stair-straight', 'Escada reta', 'Escada', 90, 400, stairShapes(90, 400)),
@@ -141,6 +146,6 @@ export const BUILTIN_BLOCKS: BlockDef[] = [
 ]
 
 /** Ordem de exibição das categorias de fábrica. */
-export const BUILTIN_CATEGORIES = ['Sala', 'Quarto', 'Cozinha', 'Banheiro', 'Área externa', 'Escada', 'Estrutura', 'Genéricos']
+export const BUILTIN_CATEGORIES = ['Sala', 'Quarto', 'Cozinha', 'Banheiro', 'Área externa', 'Jardim', 'Escada', 'Estrutura', 'Genéricos']
 
 export const BUILTIN_BY_ID = new Map(BUILTIN_BLOCKS.map((b) => [b.id, b]))
