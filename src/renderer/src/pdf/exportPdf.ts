@@ -25,7 +25,7 @@ import type {
   TextObject,
   WallObject
 } from '@shared/model'
-import { add, angleDeg, boundsOf, mul, normalize, perp, polygonArea, polygonCentroid, readableAngle, sub, type Rect } from '@renderer/lib/geometry'
+import { add, angleDeg, boundsOf, mul, normalize, perp, polygonArea, readableAngle, roomLabelPoint, sub, type Rect } from '@renderer/lib/geometry'
 import { formatArea, formatLength } from '@renderer/lib/format'
 import { resolveMaterial } from '@shared/materials'
 import { computeWallGeometry, extendedPoints } from '@renderer/canvas/wallGeometry'
@@ -340,8 +340,6 @@ function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptio
       }
       // Aberturas
       for (const o of objs) if (o.type === 'door' || o.type === 'window') drawOpening(o, layer.color)
-      // Rótulos dos cômodos (por cima das paredes/móveis)
-      for (const o of objs) if (o.type === 'room') drawRoomLabel(o)
       // Textos
       for (const o of objs) if (o.type === 'text') drawText(o, layer.color)
       // Cotas
@@ -364,6 +362,8 @@ function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptio
       }
     })
   }
+  // Rótulos dos cômodos por cima de todas as camadas (como no canvas): móveis não os cobrem.
+  for (const o of objects) if (o.type === 'room') drawRoomLabel(o)
   pdf.restoreGraphicsState()
 
   if (L.legendArea) drawLegend(L.legendArea)
@@ -407,7 +407,7 @@ function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptio
   }
 
   function drawRoomLabel(o: RoomObject): void {
-    const c = P(polygonCentroid(o.points))
+    const c = P(roomLabelPoint(o.points, o.zone))
     textCentered(o.name, { x: c.x, y: c.y - 1.6 }, 7.5, COLORS.ink, 0, true)
     textCentered(formatArea(polygonArea(o.points), ctx.unit, ctx.precision), { x: c.x, y: c.y + 1.8 }, 6.5, COLORS.muted)
   }
@@ -568,7 +568,11 @@ function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptio
   // ================================================================ anotações
 
   function drawLegend(r: Rect): void {
-    const rooms = objects.filter((o): o is RoomObject => o.type === 'room' && o.zone !== 'lot')
+    const all = objects.filter((o): o is RoomObject => o.type === 'room')
+    // Ambientes internos entram no total; áreas externas (gramado, deck, piscina…) vêm à parte;
+    // terreno e rebaixo de gesso não são listados.
+    const indoor = all.filter((o) => !o.zone)
+    const outdoor = all.filter((o) => o.zone && o.zone !== 'lot' && o.zone !== 'drop')
     pdf.setDrawColor(COLORS.frame)
     pdf.setLineWidth(0.25)
     pdf.rect(r.x, r.y, r.width, r.height)
@@ -580,28 +584,41 @@ function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptio
     pdf.line(r.x, r.y + 8.5, r.x + r.width, r.y + 8.5)
     let y = r.y + 14
     const row = 5.2
+    const limit = r.y + r.height - 12
     pdf.setFontSize(7.5)
-    for (const room of rooms) {
-      if (y > r.y + r.height - 12) {
+    const drawRows = (list: RoomObject[]): void => {
+      for (const room of list) {
+        if (y > limit) {
+          pdf.setFont('helvetica', 'normal')
+          pdf.text(`… e mais ${list.length - list.indexOf(room)} item(ns)`, r.x + 3, y)
+          y += row
+          break
+        }
+        pdf.setFillColor(room.color)
+        pdf.rect(r.x + 3, y - 2.6, 2.8, 2.8, 'F')
         pdf.setFont('helvetica', 'normal')
-        pdf.text(`… e mais ${rooms.length - rooms.indexOf(room)} cômodo(s)`, r.x + 3, y)
-        break
+        pdf.setTextColor(COLORS.ink)
+        const name = room.name.length > 26 ? `${room.name.slice(0, 25)}…` : room.name
+        pdf.text(name, r.x + 7.5, y)
+        pdf.text(formatArea(polygonArea(room.points), ctx.unit, ctx.precision), r.x + r.width - 3, y, { align: 'right' })
+        y += row
       }
-      const area = polygonArea(room.points)
-      pdf.setFillColor(room.color)
-      pdf.rect(r.x + 3, y - 2.6, 2.8, 2.8, 'F')
-      pdf.setFont('helvetica', 'normal')
-      pdf.setTextColor(COLORS.ink)
-      const name = room.name.length > 26 ? `${room.name.slice(0, 25)}…` : room.name
-      pdf.text(name, r.x + 7.5, y)
-      pdf.text(formatArea(area, ctx.unit, ctx.precision), r.x + r.width - 3, y, { align: 'right' })
-      y += row
     }
-    const total = rooms.reduce((s, room) => s + polygonArea(room.points), 0)
+    drawRows(indoor)
+    if (outdoor.length && y <= limit) {
+      y += 2
+      pdf.setFont('helvetica', 'bold')
+      pdf.setTextColor(COLORS.muted)
+      pdf.text('Áreas externas (fora do total)', r.x + 3, y)
+      y += row
+      drawRows(outdoor)
+    }
+    const total = indoor.reduce((s, room) => s + polygonArea(room.points), 0)
+    pdf.setTextColor(COLORS.ink)
     pdf.setLineWidth(0.15)
     pdf.line(r.x, r.y + r.height - 8, r.x + r.width, r.y + r.height - 8)
     pdf.setFont('helvetica', 'bold')
-    pdf.text('Área total', r.x + 3, r.y + r.height - 3)
+    pdf.text('Área interna total', r.x + 3, r.y + r.height - 3)
     pdf.text(formatArea(total, ctx.unit, ctx.precision), r.x + r.width - 3, r.y + r.height - 3, { align: 'right' })
   }
 

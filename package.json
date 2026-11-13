@@ -41,5 +41,33 @@
     "electron-vite": "^6.0.0",
     "typescript": "~5.9.0",
     "vite": "^8.3.8"
+  },
+  "build": {
+    "appId": "com.plankraft.app",
+    "productName": "PlanKraft",
+    "copyright": "PlanKraft",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    }
   }
 }

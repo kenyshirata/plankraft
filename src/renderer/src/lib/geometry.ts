@@ -218,3 +218,15 @@ export function insetPolygon(points: Point[], d: number): Point[] {
     return lineIntersection(a, dirs[prev], b, dirs[i]) ?? add(p, mul(inward[i], d))
   })
 }
+
+/**
+ * Onde escrever o nome/área de um cômodo: o centroide; no terreno, perto do canto
+ * superior esquerdo (o centro costuma estar ocupado pela casa).
+ */
+export function roomLabelPoint(points: Point[], zone?: string): Point {
+  if (zone === 'lot') {
+    const b = boundsOf(points)
+    if (b) return { x: b.x + 180, y: b.y + 70 }
+  }
+  return polygonCentroid(points)
+}

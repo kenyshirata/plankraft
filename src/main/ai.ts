@@ -63,9 +63,9 @@ async function writeSettings(s: StoredSettings): Promise<void> {
 
 async function getKey(provider: KeyProvider): Promise<string | null> {
   const enc = (await readSettings()).keys[provider]
-  if (!enc || !safeStorage.isEncryptionAvailable()) return null
+  if (!enc || !(await safeStorage.isAsyncEncryptionAvailable())) return null
   try {
-    return safeStorage.decryptString(Buffer.from(enc, 'base64'))
+    return (await safeStorage.decryptStringAsync(Buffer.from(enc, 'base64'))).result
   } catch {
     return null
   }
@@ -78,7 +78,7 @@ async function status(): Promise<AiStatus> {
     configured: { offline: true, anthropic: !!s.keys.anthropic, openai: !!s.keys.openai },
     hints: s.hints,
     models: AI_MODELS,
-    encryptionAvailable: safeStorage.isEncryptionAvailable()
+    encryptionAvailable: await safeStorage.isAsyncEncryptionAvailable()
   }
 }
 
@@ -286,11 +286,11 @@ export function registerAiIpc(): void {
       delete s.hints[provider]
     } else {
       if (typeof key !== 'string' || key.trim().length < 10 || key.length > 500) throw new Error('Chave de API inválida.')
-      if (!safeStorage.isEncryptionAvailable()) {
+      if (!(await safeStorage.isAsyncEncryptionAvailable())) {
         throw new Error('O sistema não oferece armazenamento criptografado; a chave não foi salva.')
       }
       const clean = key.trim()
-      s.keys[provider] = safeStorage.encryptString(clean).toString('base64')
+      s.keys[provider] = (await safeStorage.encryptStringAsync(clean)).toString('base64')
       s.hints[provider] = clean.slice(-4)
     }
     await writeSettings(s)

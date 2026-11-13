@@ -1,5 +1,18 @@
 # Plano de execução — recursos que faltam (comparado ao Planner 5D)
 
+## Status (13/11/2026)
+
+| Fase | Recurso | Situação |
+|---|---|---|
+| 1 | Materiais e texturas | ✅ entregue |
+| 2 | Vários andares e escada | ✅ entregue (escada reta, em L e em U, parametrizável) |
+| 3 | Passeio em primeira pessoa | ✅ entregue |
+| 4 | Planta a partir de imagem (IA) | ✅ entregue (testada só com resposta simulada) |
+| 5 | Detalhes arquitetônicos | ✅ entregue (inclui nichos, rebaixos de gesso e cerca de ripas) |
+| 6 | Área externa | ✅ entregue |
+| 7 | Catálogo maior e modelos 3D (.glb) | ✅ entregue |
+| 8 | Render (sol, 2K/4K, panorama 360°) | ✅ entregue |
+
 Base: o PlanKraft já tem desenho 2D, cotas, camadas, blocos, imagem de fundo, PDF vetorial, geração offline/IA e maquete 3D.
 Este plano cobre o que falta, em fases pequenas, cada uma entregável e testável sozinha.
 

@@ -1,6 +1,6 @@
 import { Group, Line, Text } from 'react-konva'
 import type { Id, LengthUnit, RoomObject } from '@shared/model'
-import { insetPolygon, polygonArea, polygonCentroid } from '@renderer/lib/geometry'
+import { insetPolygon, polygonArea, roomLabelPoint } from '@renderer/lib/geometry'
 import { formatArea } from '@renderer/lib/format'
 import type { CanvasPalette } from '@renderer/theme'
 import { resolveMaterial } from '@shared/materials'
@@ -79,7 +79,7 @@ export function RoomShapes({ rooms, palette, scale, selected, hoveredId, unit, p
         )
       })}
       {part !== 'fill' && rooms.map((r) => {
-        const c = polygonCentroid(r.points)
+        const c = roomLabelPoint(r.points, r.zone)
         const w = 220 * hair
         return (
           <Group key={`label-${r.id}`} x={c.x} y={c.y} listening={false}>
