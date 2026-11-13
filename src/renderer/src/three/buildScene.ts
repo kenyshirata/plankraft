@@ -14,7 +14,8 @@
  */
 import * as THREE from 'three'
 import type { BlockDef, BlockShape } from '@shared/blocks'
-import type { BlockObject, DoorObject, Id, ImageObject, OpeningObject, PlanDocument, RoomObject, WallObject } from '@shared/model'
+import { WINDOW_HEIGHT_DEFAULT, WINDOW_SILL_DEFAULT } from '@shared/model'
+import type { BlockObject, DoorObject, Id, ImageObject, OpeningObject, PlanDocument, RoomObject, WallObject, WindowObject } from '@shared/model'
 import { distance, normalize, perp, pointInPolygon, polygonArea, polygonCentroid, sub } from '@renderer/lib/geometry'
 import { computeWallGeometry } from '@renderer/canvas/wallGeometry'
 import { clampOffset, OPENING_MARGIN } from '@renderer/lib/openings'
@@ -77,7 +78,15 @@ export interface StairPiece {
   height: number
 }
 
+export type RoofType = 'off' | 'flat' | 'gable' | 'hip'
+
+export interface RoofPiece {
+  geometry: THREE.BufferGeometry
+  color: string
+}
+
 export interface Scene3D {
+  roof: RoofPiece | null
   stairs: StairPiece[]
   /** Cotas (m) dos pisos dos andares. */
   levelElevations: number[]
@@ -96,6 +105,8 @@ export interface SceneOptions {
   /** Corte: paredes limitadas a esta altura (vista "maquete aberta"). */
   cutHeight: number | null
   includeImages: boolean
+  /** Telhado simples sobre o contorno do último andar (omitido na vista cortada). */
+  roof?: RoofType
   resolveBlock(id: string): BlockDef | undefined
   image(asset: string): HTMLImageElement | null
 }
@@ -143,6 +154,8 @@ const STYLES: Record<string, FurnitureStyle> = {
   'builtin:garden-chair': { base: 0.45, byIndex: [0.45, 0.85], color: '#a3b48f' },
   'builtin:lounger': { base: 0.35, color: '#a3b48f' },
   'builtin:bbq': { base: 0.9, detail: 0.92, color: '#8d8f93' },
+  'builtin:pillar-rect': { base: 2.7, color: '#cfcac2' },
+  'builtin:pillar-round': { base: 2.7, color: '#cfcac2' },
   'builtin:circle': { base: 0.5, color: '#d6d2cb' },
   'builtin:rectangle': { base: 0.5, color: '#d6d2cb' },
   'builtin:door-std': { base: 0, color: '#d6d2cb' },
@@ -222,6 +235,8 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   const furniture: FurniturePiece[] = []
   const images: ImagePiece[] = []
   const stairs: StairPiece[] = []
+  let roofBase = 0
+  let roofBox: { x0: number; z0: number; x1: number; z1: number } | null = null
 
   const levelObjects = (levelId: Id): PlanDocument['objects'] => {
     const ids = new Set(doc.layers.filter((l) => l.visible && l.levelId === levelId).map((l) => l.id))
@@ -250,6 +265,13 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   // Andares com outro por cima têm paredes até a laje; o último usa a altura configurada.
   const wallH = isTop ? Math.min(opts.wallHeight, levelH) : levelH
   const H = opts.cutHeight !== null ? Math.min(opts.cutHeight, wallH) : wallH
+  if (isTop && walls.length) {
+    roofBase = yOff + wallH
+    const xsW = walls.flatMap((w) => [w.a.x, w.b.x])
+    const zsW = walls.flatMap((w) => [w.a.y, w.b.y])
+    const th = Math.max(...walls.map((w) => w.thickness)) / 2
+    roofBox = { x0: (Math.min(...xsW) - th) * M, z0: (Math.min(...zsW) - th) * M, x1: (Math.max(...xsW) + th) * M, z1: (Math.max(...zsW) + th) * M }
+  }
 
   // ---- paredes + aberturas
   for (const w of walls) {
@@ -297,27 +319,63 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
       piece(cursor, op.from, 0, H)
       if (op.o.type === 'door') {
         if (H > DOOR_HEIGHT) piece(op.from, op.to, DOOR_HEIGHT, H)
-        // Folha da porta aberta a 90° (como no símbolo 2D).
         const d = op.o as DoorObject
-        const hingeS = d.hinge === 'start' ? op.from : op.to
-        const face = (d.side * w.thickness) / 2
-        const hinge = at(hingeS)
-        const leafLen = op.width
-        const inward = d.hinge === 'start' ? 2 : -2 // 2 cm para dentro do vão
-        const cx = hinge.x + nrm.x * (face + (d.side * leafLen) / 2) + dir.x * inward
-        const cy = hinge.y + nrm.y * (face + (d.side * leafLen) / 2) + dir.y * inward
-        boxes.push({
-          position: [cx * M, Math.min(DOOR_HEIGHT, H) / 2 + yOff, cy * M],
-          rotationY,
-          size: [0.04, Math.min(DOOR_HEIGHT, H) - 0.01, leafLen * M],
-          kind: 'door',
-          color: '#c9a77c'
-        })
+        const doorH = Math.min(DOOR_HEIGHT, H)
+        const variant = d.variant ?? 'swing'
+        /** Folha aberta a 90° (como no símbolo 2D): dobradiça em `hingeS`, comprimento `leafLen`. */
+        const swingLeaf = (hingeAt: 'start' | 'end', leafLen: number): void => {
+          const hingeS = hingeAt === 'start' ? op.from : op.to
+          const face = (d.side * w.thickness) / 2
+          const hinge = at(hingeS)
+          const inward = hingeAt === 'start' ? 2 : -2 // 2 cm para dentro do vão
+          const cx = hinge.x + nrm.x * (face + (d.side * leafLen) / 2) + dir.x * inward
+          const cy = hinge.y + nrm.y * (face + (d.side * leafLen) / 2) + dir.y * inward
+          boxes.push({
+            position: [cx * M, doorH / 2 + yOff, cy * M],
+            rotationY,
+            size: [0.04, doorH - 0.01, leafLen * M],
+            kind: 'door',
+            color: '#c9a77c'
+          })
+        }
+        /** Painel de correr: ocupa [sa, sb] ao longo do eixo, deslocado para um trilho. */
+        const slider = (sa: number, sb: number, rail: number): void => {
+          const mid = at((sa + sb) / 2)
+          boxes.push({
+            position: [(mid.x + nrm.x * rail) * M, doorH / 2 + yOff, (mid.y + nrm.y * rail) * M],
+            rotationY,
+            size: [(sb - sa) * M, doorH - 0.01, 0.04],
+            kind: 'door',
+            color: '#c9a77c'
+          })
+        }
+        if (variant === 'swing') swingLeaf(d.hinge, op.width)
+        else if (variant === 'double') {
+          swingLeaf('start', op.width / 2)
+          swingLeaf('end', op.width / 2)
+        } else if (variant === 'sliding') {
+          const mid = (op.from + op.to) / 2
+          const over = op.width * 0.04
+          slider(op.from, mid + over, w.thickness / 4)
+          slider(mid - over, op.to, -w.thickness / 4)
+        }
+        // 'open' (vão livre): sem folha.
       } else {
-        const sill = Math.min(WINDOW_SILL, H)
+        const win = op.o as WindowObject
+        const sill = Math.min(((win.sill ?? WINDOW_SILL_DEFAULT) / 100), H)
+        const top = Math.min(sill + (win.height ?? WINDOW_HEIGHT_DEFAULT) / 100, H)
         piece(op.from, op.to, 0, sill)
-        if (H > sill) piece(op.from, op.to, sill, Math.min(WINDOW_TOP, H), 'glass', t * 0.3, '#9ec9e8')
-        if (H > WINDOW_TOP) piece(op.from, op.to, WINDOW_TOP, H)
+        if (top > sill) {
+          if (win.variant === 'sliding') {
+            const mid = (op.from + op.to) / 2
+            const over = op.width * 0.05
+            piece(op.from, mid + over, sill, top, 'glass', t * 0.2, '#9ec9e8')
+            piece(mid - over, op.to, sill, top, 'glass', t * 0.2, '#b4d6ee')
+          } else {
+            piece(op.from, op.to, sill, top, 'glass', t * 0.3, '#9ec9e8')
+          }
+        }
+        if (H > top) piece(op.from, op.to, top, H)
       }
       cursor = op.to
     }
@@ -390,7 +448,8 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
     if (!filled.length) continue
     const largest = filled.reduce((a, x) => (shapeArea(x.pts) > shapeArea(a.pts) ? x : a), filled[0])
     for (const f of filled) {
-      const h = style.byIndex?.[f.i] ?? (f === largest ? style.base : (style.detail ?? style.base + 0.03))
+      // Pilares vão do piso ao teto do andar (acompanham o corte das paredes).
+      const h = def.id.startsWith('builtin:pillar') ? H : (style.byIndex?.[f.i] ?? (f === largest ? style.base : (style.detail ?? style.base + 0.03)))
       if (h <= 0) continue
       const geometry = new THREE.ExtrudeGeometry(toShape(f.pts), { depth: h, bevelEnabled: false })
       geometry.rotateX(-Math.PI / 2)
@@ -430,6 +489,7 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   const minZ = empty ? -4 : Math.min(...zs)
   const maxZ = empty ? 4 : Math.max(...zs)
   return {
+    roof: opts.roof && opts.roof !== 'off' && opts.cutHeight === null && roofBox ? buildRoof(opts.roof, roofBox, roofBase) : null,
     stairs,
     levelElevations: doc.levels.map((l) => l.elevation * M),
     boxes,
@@ -440,4 +500,70 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
     radius: Math.max(3, Math.hypot(maxX - minX, maxZ - minZ) / 2),
     empty
   }
+}
+
+// --------------------------------------------------------------- telhado
+
+const ROOF_OVERHANG = 0.4
+const ROOF_COLOR = '#b5543a'
+
+/** Telhado simples (plano, duas ou quatro águas) sobre a caixa das paredes do último andar. */
+function buildRoof(type: Exclude<RoofType, 'off'>, box: { x0: number; z0: number; x1: number; z1: number }, base: number): RoofPiece {
+  const x0 = box.x0 - ROOF_OVERHANG
+  const x1 = box.x1 + ROOF_OVERHANG
+  const z0 = box.z0 - ROOF_OVERHANG
+  const z1 = box.z1 + ROOF_OVERHANG
+  const w = x1 - x0
+  const d = z1 - z0
+  const pos: number[] = []
+  const tri = (a: number[], b: number[], c: number[]): void => void pos.push(...a, ...b, ...c)
+  const quad = (a: number[], b: number[], c: number[], e: number[]): void => {
+    tri(a, b, c)
+    tri(a, c, e)
+  }
+  if (type === 'flat') {
+    const t = 0.15
+    const g = new THREE.BoxGeometry(w, t, d)
+    g.translate((x0 + x1) / 2, base + t / 2, (z0 + z1) / 2)
+    return { geometry: g, color: '#a9a49b' }
+  }
+  const alongX = w >= d // cumeeira ao longo do lado maior
+  const span = Math.min(w, d)
+  const rise = Math.min(2.4, span * 0.22)
+  const y0 = base
+  const yr = base + rise
+  if (alongX) {
+    const zc = (z0 + z1) / 2
+    // hip: a cumeeira encurta `span/2` em cada ponta; gable: vai de ponta a ponta
+    const inset = type === 'hip' ? Math.min(span / 2, w / 2) : 0
+    const r0 = [x0 + inset, yr, zc]
+    const r1 = [x1 - inset, yr, zc]
+    quad([x0, y0, z0], [x1, y0, z0], r1, r0)
+    quad([x0, y0, z1], r0, r1, [x1, y0, z1])
+    if (type === 'hip') {
+      tri([x0, y0, z0], r0, [x0, y0, z1])
+      tri([x1, y0, z0], [x1, y0, z1], r1)
+    } else {
+      tri([x0, y0, z0], [x0, y0, z1], r0)
+      tri([x1, y0, z0], r1, [x1, y0, z1])
+    }
+  } else {
+    const xc = (x0 + x1) / 2
+    const inset = type === 'hip' ? Math.min(span / 2, d / 2) : 0
+    const r0 = [xc, yr, z0 + inset]
+    const r1 = [xc, yr, z1 - inset]
+    quad([x0, y0, z0], r0, r1, [x0, y0, z1])
+    quad([x1, y0, z0], [x1, y0, z1], r1, r0)
+    if (type === 'hip') {
+      tri([x0, y0, z0], [x1, y0, z0], r0)
+      tri([x0, y0, z1], r1, [x1, y0, z1])
+    } else {
+      tri([x0, y0, z0], [x1, y0, z0], r0)
+      tri([x0, y0, z1], r1, [x1, y0, z1])
+    }
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.computeVertexNormals()
+  return { geometry: g, color: ROOF_COLOR }
 }

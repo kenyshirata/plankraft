@@ -30,6 +30,7 @@ import { formatArea, formatLength } from '@renderer/lib/format'
 import { resolveMaterial } from '@shared/materials'
 import { computeWallGeometry, extendedPoints } from '@renderer/canvas/wallGeometry'
 import { openingGeometry } from '@renderer/lib/openings'
+import { openingPrims } from '@renderer/lib/openingSymbols'
 import { planarFaces } from '@renderer/lib/rooms'
 import { cornerAngles, exteriorSides, layoutDimensions, measuredSegment } from '@renderer/lib/dimensions'
 import { blockCorners, instanceMatrix, transformShape } from '@renderer/lib/blockGeometry'
@@ -417,22 +418,13 @@ function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptio
     const ink = tint ?? COLORS.ink
     strokePath([add(g.start, hj), sub(g.start, hj)], false, COLORS.wall, 0.25)
     strokePath([add(g.end, hj), sub(g.end, hj)], false, COLORS.wall, 0.25)
-    if (o.type === 'window') {
-      strokePath([add(g.start, hj), add(g.end, hj), sub(g.end, hj), sub(g.start, hj)], true, ink, 0.18)
-      const glass = mul(g.normal, Math.min(g.thickness / 6, 3))
-      strokePath([add(g.start, glass), add(g.end, glass)], false, ink, 0.15)
-      strokePath([sub(g.start, glass), sub(g.end, glass)], false, ink, 0.15)
-    } else {
-      const face = mul(g.normal, (o.side * g.thickness) / 2)
-      const hinge = add(o.hinge === 'start' ? g.start : g.end, face)
-      const free = add(o.hinge === 'start' ? g.end : g.start, face)
-      const leaf = add(hinge, mul(g.normal, o.side * g.width))
-      strokePath([hinge, leaf], false, ink, 0.25)
-      const a0 = Math.atan2(leaf.y - hinge.y, leaf.x - hinge.x)
-      let delta = Math.atan2(free.y - hinge.y, free.x - hinge.x) - a0
-      while (delta > Math.PI) delta -= 2 * Math.PI
-      while (delta < -Math.PI) delta += 2 * Math.PI
-      strokePath(arcPoints(hinge, g.width, a0, delta), false, ink, 0.13, [0.8, 0.6])
+    for (const pr of openingPrims({ type: o.type, variant: o.variant, side: o.type === 'door' ? o.side : undefined, hinge: o.type === 'door' ? o.hinge : undefined }, g)) {
+      if (pr.kind === 'line') {
+        const w = pr.weight === 'heavy' ? 0.25 : pr.weight === 'thin' ? 0.12 : 0.16
+        strokePath(pr.pts, !!pr.closed, ink, w, pr.dash ? [0.8, 0.6] : undefined)
+      } else {
+        strokePath(arcPoints(pr.center, pr.r, pr.from, pr.delta), false, ink, 0.13, [0.8, 0.6])
+      }
     }
   }
 

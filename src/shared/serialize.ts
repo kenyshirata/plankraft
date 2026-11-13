@@ -6,6 +6,8 @@
 import {
   createDefaultLayers,
   createLevel,
+  type DoorVariant,
+  type WindowVariant,
   DEFAULT_LEVEL_HEIGHT,
   hostWallId,
   newId,
@@ -65,9 +67,17 @@ function normalizeObject(v: unknown, layerIds: Set<string>, fallbackLayer: strin
     case 'window': {
       if (typeof v.wallId !== 'string') return null
       const base = { id, layerId, wallId: v.wallId, offset: num(v.offset, 0), width: Math.max(10, num(v.width, 80)) }
+      const dv = ['double', 'sliding', 'open'].includes(v.variant as string) ? (v.variant as DoorVariant) : undefined
+      const wv = ['sliding', 'tilt', 'fixed'].includes(v.variant as string) ? (v.variant as WindowVariant) : undefined
       return v.type === 'door'
-        ? { ...base, type: 'door', side: v.side === -1 ? -1 : 1, hinge: v.hinge === 'end' ? 'end' : 'start' }
-        : { ...base, type: 'window' }
+        ? { ...base, type: 'door', side: v.side === -1 ? -1 : 1, hinge: v.hinge === 'end' ? 'end' : 'start', ...(dv ? { variant: dv } : {}) }
+        : {
+            ...base,
+            type: 'window',
+            ...(wv ? { variant: wv } : {}),
+            ...(typeof v.sill === 'number' && Number.isFinite(v.sill) ? { sill: Math.min(250, Math.max(0, v.sill)) } : {}),
+            ...(typeof v.height === 'number' && Number.isFinite(v.height) ? { height: Math.min(250, Math.max(20, v.height)) } : {})
+          }
     }
     case 'room': {
       const pts = Array.isArray(v.points) ? v.points.map(point).filter((p): p is Point => p !== null) : []

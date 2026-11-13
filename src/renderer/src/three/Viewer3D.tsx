@@ -53,15 +53,17 @@ export default function Viewer3D(): React.JSX.Element {
         wallHeight: s.wallHeight3d,
         cutHeight: s.cutaway3d && !walk ? 1.2 : null,
         includeImages: s.background3d,
+        roof: s.roof3d,
         resolveBlock: (id) => resolveBlock(id, doc),
         image: (key) => assets[key]?.image ?? null
       }),
-    [doc, assets, s.wallHeight3d, s.cutaway3d, s.background3d, walk]
+    [doc, assets, s.wallHeight3d, s.cutaway3d, s.background3d, s.roof3d, walk]
   )
 
   // Libera as geometrias antigas quando a cena é reconstruída.
   useEffect(
     () => () => {
+      scene.roof?.geometry.dispose()
       scene.floors.forEach((f) => {
         f.geometry.dispose()
         f.slab?.dispose()
@@ -111,7 +113,7 @@ export default function Viewer3D(): React.JSX.Element {
         camera={{ fov: 45, near: 0.1, far: 500, position: [10, 10, 10] }}
       >
         <color attach="background" args={[bg]} />
-        <SceneContent scene={scene} shadows={s.shadows3d} labels={s.labels3d && !walk} dark={theme === 'dark'} walk={walk} onExit={() => setWalk(null)} />
+        <SceneContent scene={scene} shadows={s.shadows3d} labels={s.labels3d && !walk && !scene.roof} dark={theme === 'dark'} walk={walk} onExit={() => setWalk(null)} />
       </Canvas>
 
       {scene.empty && <div className="viewer3d__empty">Desenhe paredes no 2D (ou gere uma planta) para ver a maquete 3D.</div>}
@@ -178,6 +180,19 @@ export default function Viewer3D(): React.JSX.Element {
           </button>
         )}
         <span className="toolbar__sep" />
+        <label className="viewer3d__roof" data-tooltip="Telhado">
+          <select
+            className="select"
+            value={s.roof3d}
+            aria-label="Telhado"
+            onChange={(e) => s.set('roof3d', e.target.value as typeof s.roof3d)}
+          >
+            <option value="off">Sem telhado</option>
+            <option value="flat">Laje plana</option>
+            <option value="gable">Duas águas</option>
+            <option value="hip">Quatro águas</option>
+          </select>
+        </label>
         <label className="viewer3d__height" data-tooltip="Altura das paredes">
           <input
             type="range"
@@ -297,6 +312,12 @@ function SceneContent({
       {scene.floors.map((f) => (
         <FloorMesh key={f.id} f={f} />
       ))}
+
+      {scene.roof && (
+        <mesh geometry={scene.roof.geometry} castShadow receiveShadow>
+          <meshStandardMaterial color={scene.roof.color} roughness={0.85} side={THREE.DoubleSide} />
+        </mesh>
+      )}
 
       {scene.boxes.map((b, i) => (
         <BoxMesh key={i} b={b} />

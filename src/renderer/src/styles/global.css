@@ -2156,3 +2156,9 @@ kbd {
 .check.is-disabled {
   opacity: 0.55;
 }
+
+.viewer3d__roof .select {
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+}

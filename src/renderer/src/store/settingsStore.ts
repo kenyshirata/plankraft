@@ -6,7 +6,7 @@
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { LengthUnit } from '@shared/model'
+import type { DoorVariant, LengthUnit, WindowVariant } from '@shared/model'
 
 export type ThemePreference = 'light' | 'dark' | 'system'
 export type Precision = 0 | 1 | 2
@@ -23,6 +23,9 @@ export interface Settings {
   wallThickness: number
   /** Larguras padrão de vão, em cm. */
   doorWidth: number
+  /** Tipo de porta/janela inseridas pelas ferramentas. */
+  doorVariant: DoorVariant
+  windowVariant: WindowVariant
   windowWidth: number
   /** Altura padrão de texto novo, em cm. */
   textSize: number
@@ -34,6 +37,8 @@ export interface Settings {
   showDimensions: boolean
   /** Mostra o andar de baixo esmaecido ao editar um andar superior. */
   ghostLevel: boolean
+  /** Telhado simples na maquete 3D. */
+  roof3d: 'off' | 'flat' | 'gable' | 'hip'
   /** 'architectural' = linha externa à parede; 'linear' = sobre a parede. */
   dimensionStyle: DimensionStyle
   /** Distância (px de tela) entre a face da parede e a linha de cota. */
@@ -75,11 +80,14 @@ export const DEFAULT_SETTINGS: Settings = {
   snapEnabled: true,
   wallThickness: 15,
   doorWidth: 80,
+  doorVariant: 'swing',
+  windowVariant: 'casement',
   windowWidth: 120,
   textSize: 25,
   autoLayerByTool: true,
   showDimensions: true,
   ghostLevel: true,
+  roof3d: 'off',
   dimensionStyle: 'architectural',
   dimensionOffset: 20,
   autoDimensions: true,

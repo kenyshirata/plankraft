@@ -179,6 +179,8 @@ export function CanvasStage(): React.JSX.Element {
       snapEnabled: s.snapEnabled,
       wallThickness: s.wallThickness,
       doorWidth: s.doorWidth,
+      doorVariant: s.doorVariant,
+      windowVariant: s.windowVariant,
       windowWidth: s.windowWidth,
       unit: s.unit,
       precision: s.precision,
@@ -431,8 +433,8 @@ export function CanvasStage(): React.JSX.Element {
     const base = { id: newId(), layerId: activeLayerId, wallId: p.wall.id, offset: p.offset }
     const o: OpeningObject =
       tool === 'door'
-        ? { ...base, type: 'door', width: settings.doorWidth, side: p.side, hinge: doorHinge }
-        : { ...base, type: 'window', width: settings.windowWidth }
+        ? { ...base, type: 'door', width: settings.doorWidth, side: p.side, hinge: doorHinge, ...(settings.doorVariant !== 'swing' ? { variant: settings.doorVariant } : {}) }
+        : { ...base, type: 'window', width: settings.windowWidth, ...(settings.windowVariant !== 'casement' ? { variant: settings.windowVariant } : {}) }
     useEditorStore.getState().commit((d) => addObjects(d, [o]))
   }
 
@@ -1178,7 +1180,7 @@ export function CanvasStage(): React.JSX.Element {
             {/* Pré-visualização de porta/janela */}
             {openingPreview && (tool === 'door' || tool === 'window') && (
               <OpeningSymbol
-                opening={{ type: tool, side: openingPreview.side, hinge: doorHinge }}
+                opening={{ type: tool, side: openingPreview.side, hinge: doorHinge, variant: tool === 'door' ? settings.doorVariant : settings.windowVariant }}
                 g={openingGeometry(
                   { offset: openingPreview.offset, width: tool === 'door' ? settings.doorWidth : settings.windowWidth },
                   openingPreview.wall

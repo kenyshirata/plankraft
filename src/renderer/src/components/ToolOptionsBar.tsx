@@ -3,6 +3,8 @@ import { useActiveLayer, useEditorStore } from '@renderer/store/editorStore'
 import { useSettingsStore } from '@renderer/store/settingsStore'
 import { NumberField } from './ui/NumberField'
 import { generateMissingDimensions } from '@renderer/store/actions'
+import { DOOR_VARIANTS, WINDOW_VARIANTS } from '@renderer/lib/openingSymbols'
+import type { DoorVariant, WindowVariant } from '@shared/model'
 
 /**
  * Barra contextual (estilo Figma) logo acima do canvas: opções da ferramenta
@@ -47,6 +49,16 @@ export function ToolOptionsBar(): React.JSX.Element {
               <span>Largura</span>
               <NumberField value={s.doorWidth} min={40} max={400} suffix="cm" onCommit={(v) => s.set('doorWidth', v)} />
             </label>
+            <label className="inline-field">
+              <span>Tipo</span>
+              <select className="select" value={s.doorVariant} onChange={(e) => s.set('doorVariant', e.target.value as DoorVariant)}>
+                {DOOR_VARIANTS.map((v) => (
+                  <option key={v.value} value={v.value}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Segmented
               label="Dobradiça"
               value={doorHinge}
@@ -66,6 +78,16 @@ export function ToolOptionsBar(): React.JSX.Element {
             <label className="inline-field">
               <span>Largura</span>
               <NumberField value={s.windowWidth} min={20} max={1000} suffix="cm" onCommit={(v) => s.set('windowWidth', v)} />
+            </label>
+            <label className="inline-field">
+              <span>Tipo</span>
+              <select className="select" value={s.windowVariant} onChange={(e) => s.set('windowVariant', e.target.value as WindowVariant)}>
+                {WINDOW_VARIANTS.map((v) => (
+                  <option key={v.value} value={v.value}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <span className="hint">Clique sobre uma parede para inserir · arraste depois para reposicionar</span>
           </>

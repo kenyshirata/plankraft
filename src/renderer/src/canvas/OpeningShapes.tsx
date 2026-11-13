@@ -1,6 +1,7 @@
 import { Group, Line, Shape } from 'react-konva'
-import type { Id, OpeningObject, WallObject } from '@shared/model'
-import { add, mul } from '@renderer/lib/geometry'
+import type { DoorVariant, Id, OpeningObject, WallObject, WindowVariant } from '@shared/model'
+import { mul } from '@renderer/lib/geometry'
+import { openingPrims, type SymbolPrim } from '@renderer/lib/openingSymbols'
 import { openingGeometry, openingRectPoints, type OpeningGeometry } from '@renderer/lib/openings'
 import type { CanvasPalette } from '@renderer/theme'
 
@@ -36,7 +37,7 @@ export function OpeningShapes({ openings, wallsById, palette, scale, selected, h
 }
 
 interface SymbolProps {
-  opening: Pick<OpeningObject, 'type'> & Partial<Pick<OpeningObject, 'id'>> & { side?: 1 | -1; hinge?: 'start' | 'end' }
+  opening: Pick<OpeningObject, 'type'> & Partial<Pick<OpeningObject, 'id'>> & { side?: 1 | -1; hinge?: 'start' | 'end'; variant?: DoorVariant | WindowVariant }
   g: OpeningGeometry
   palette: CanvasPalette
   scale: number
@@ -74,70 +75,44 @@ export function OpeningSymbol({ opening, g, palette, scale, state, tint }: Symbo
           listening={false}
         />
       ))}
-      {opening.type === 'window' ? (
-        <WindowSymbol g={g} ink={ink} lw={lw} />
-      ) : (
-        <DoorSymbol g={g} ink={ink} lw={lw} side={opening.side ?? 1} hinge={opening.hinge ?? 'start'} />
-      )}
+      <Prims prims={openingPrims({ type: opening.type, variant: opening.variant, side: opening.side, hinge: opening.hinge }, g)} ink={ink} lw={lw} />
     </Group>
   )
 }
 
-function WindowSymbol({ g, ink, lw }: { g: OpeningGeometry; ink: string; lw: number }): React.JSX.Element {
-  // Caixilho (contorno no plano da parede) + duas linhas de vidro próximas ao eixo.
-  const glass = mul(g.normal, Math.min(g.thickness / 6, 3))
-  const line = (o: { x: number; y: number }): number[] => {
-    const s = add(g.start, o)
-    const e = add(g.end, o)
-    return [s.x, s.y, e.x, e.y]
-  }
+function Prims({ prims, ink, lw }: { prims: SymbolPrim[]; ink: string; lw: number }): React.JSX.Element {
   return (
     <>
-      <Line points={openingRectPoints(g)} closed stroke={ink} strokeWidth={lw} listening={false} />
-      <Line points={line(glass)} stroke={ink} strokeWidth={lw} listening={false} />
-      <Line points={line(mul(glass, -1))} stroke={ink} strokeWidth={lw} listening={false} />
-    </>
-  )
-}
-
-function DoorSymbol({
-  g,
-  ink,
-  lw,
-  side,
-  hinge
-}: {
-  g: OpeningGeometry
-  ink: string
-  lw: number
-  side: 1 | -1
-  hinge: 'start' | 'end'
-}): React.JSX.Element {
-  // A folha parte da face da parede do lado de abertura.
-  const face = mul(g.normal, (side * g.thickness) / 2)
-  const hingePt = add(hinge === 'start' ? g.start : g.end, face)
-  const freePt = add(hinge === 'start' ? g.end : g.start, face)
-  const leafEnd = add(hingePt, mul(g.normal, side * g.width))
-  return (
-    <>
-      <Line points={[hingePt.x, hingePt.y, leafEnd.x, leafEnd.y]} stroke={ink} strokeWidth={lw * 1.4} listening={false} />
-      <Shape
-        listening={false}
-        stroke={ink}
-        strokeWidth={lw}
-        dash={[lw * 4, lw * 3]}
-        sceneFunc={(ctx, shape) => {
-          // Arco de 90° do fim da folha até o batente livre.
-          const a0 = Math.atan2(leafEnd.y - hingePt.y, leafEnd.x - hingePt.x)
-          const a1 = Math.atan2(freePt.y - hingePt.y, freePt.x - hingePt.x)
-          let delta = a1 - a0
-          while (delta > Math.PI) delta -= 2 * Math.PI
-          while (delta < -Math.PI) delta += 2 * Math.PI
-          ctx.beginPath()
-          ctx.arc(hingePt.x, hingePt.y, g.width, a0, a0 + delta, delta < 0)
-          ctx.strokeShape(shape)
-        }}
-      />
+      {prims.map((pr, i) => {
+        if (pr.kind === 'line') {
+          const w = pr.weight === 'heavy' ? lw * 1.4 : pr.weight === 'thin' ? lw * 0.7 : lw
+          return (
+            <Line
+              key={i}
+              points={pr.pts.flatMap((p) => [p.x, p.y])}
+              closed={pr.closed}
+              stroke={ink}
+              strokeWidth={w}
+              dash={pr.dash ? [lw * 3, lw * 2.5] : undefined}
+              listening={false}
+            />
+          )
+        }
+        return (
+          <Shape
+            key={i}
+            listening={false}
+            stroke={ink}
+            strokeWidth={lw}
+            dash={pr.dash ? [lw * 4, lw * 3] : undefined}
+            sceneFunc={(ctx, shape) => {
+              ctx.beginPath()
+              ctx.arc(pr.center.x, pr.center.y, pr.r, pr.from, pr.from + pr.delta, pr.delta < 0)
+              ctx.strokeShape(shape)
+            }}
+          />
+        )
+      })}
     </>
   )
 }

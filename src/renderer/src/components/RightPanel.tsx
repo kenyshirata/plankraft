@@ -25,6 +25,8 @@ import { AiSettings } from './AiSettings'
 import { openRecognize } from './RecognizeDialog'
 import { MaterialSwatch } from './MaterialsPanel'
 import { resolveMaterial } from '@shared/materials'
+import { DOOR_VARIANTS, WINDOW_VARIANTS } from '@renderer/lib/openingSymbols'
+import { WINDOW_HEIGHT_DEFAULT, WINDOW_SILL_DEFAULT } from '@shared/model'
 import { applyMaterial } from '@renderer/store/materialActions'
 import { openOnboarding } from './Onboarding'
 import { useAssetImage } from '@renderer/store/assetStore'
@@ -302,7 +304,30 @@ function OpeningProps({ opening, unit, precision }: { opening: OpeningObject; un
           {formatLength(len, unit, precision)} · esp. {wall.thickness} cm
         </span>
       </Field>
-      {opening.type === 'door' && <DoorButtons door={opening} />}
+      <Field label="Tipo">
+        <select
+          className="select"
+          value={opening.variant ?? (opening.type === 'door' ? 'swing' : 'casement')}
+          onChange={(e) => setPatch({ variant: e.target.value } as Partial<OpeningObject>)}
+        >
+          {(opening.type === 'door' ? DOOR_VARIANTS : WINDOW_VARIANTS).map((v) => (
+            <option key={v.value} value={v.value}>
+              {v.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {opening.type === 'window' && (
+        <>
+          <Field label="Peitoril">
+            <NumberField value={opening.sill ?? WINDOW_SILL_DEFAULT} min={0} max={250} suffix="cm" onCommit={(sill) => setPatch({ sill } as Partial<OpeningObject>)} />
+          </Field>
+          <Field label="Altura da janela">
+            <NumberField value={opening.height ?? WINDOW_HEIGHT_DEFAULT} min={20} max={250} suffix="cm" onCommit={(height) => setPatch({ height } as Partial<OpeningObject>)} />
+          </Field>
+        </>
+      )}
+      {opening.type === 'door' && opening.variant !== 'open' && opening.variant !== 'sliding' && <DoorButtons door={opening} />}
     </>
   )
 }

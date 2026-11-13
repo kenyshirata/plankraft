@@ -84,8 +84,18 @@ interface OpeningBase extends BaseObject {
   width: number
 }
 
+/** Tipo de porta: de abrir (padrão), dupla, de correr ou vão livre (sem folha). */
+export type DoorVariant = 'swing' | 'double' | 'sliding' | 'open'
+/** Tipo de janela: de abrir (padrão), de correr, basculante ou fixa. */
+export type WindowVariant = 'casement' | 'sliding' | 'tilt' | 'fixed'
+
+export const WINDOW_SILL_DEFAULT = 100
+export const WINDOW_HEIGHT_DEFAULT = 110
+
 export interface DoorObject extends OpeningBase {
   type: 'door'
+  /** Ausente = 'swing'. */
+  variant?: DoorVariant
   /** Lado para onde a folha abre: 1 = lado esquerdo do vetor a→b, -1 = direito. */
   side: 1 | -1
   /** Dobradiça no lado do ponto `a` ('start') ou do ponto `b` ('end') do vão. */
@@ -94,6 +104,11 @@ export interface DoorObject extends OpeningBase {
 
 export interface WindowObject extends OpeningBase {
   type: 'window'
+  /** Ausente = 'casement'. */
+  variant?: WindowVariant
+  /** Altura do peitoril (cm do piso) e altura da janela (cm). Ausentes = 100 e 110. */
+  sill?: number
+  height?: number
 }
 
 export type OpeningObject = DoorObject | WindowObject

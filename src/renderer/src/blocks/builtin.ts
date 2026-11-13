@@ -125,6 +125,8 @@ export const BUILTIN_BLOCKS: BlockDef[] = [
   def('bbq', 'Churrasqueira', 'Área externa', 100, 60, [R(0, 0, 100, 60, { r: 2 }), R(10, 8, 80, 40, { fill: 'none' }), ...[18, 26, 34, 42, 50, 58, 66, 74, 82].map((x) => L(x, 10, x, 46, { weight: 0.5 }))]),
 
   // ---------------------------------------------------------------- Genéricos
+  def('pillar-rect', 'Pilar quadrado', 'Estrutura', 30, 30, [R(0, 0, 30, 30), L(0, 0, 30, 30, { weight: 0.5 }), L(30, 0, 0, 30, { weight: 0.5 })]),
+  def('pillar-round', 'Pilar redondo', 'Estrutura', 30, 30, [E(15, 15, 15, 15), L(3, 3, 27, 27, { weight: 0.5 }), L(27, 3, 3, 27, { weight: 0.5 })]),
   def('stair-straight', 'Escada reta', 'Escada', 90, 400, stairShapes(90, 400)),
   def('stair-wide', 'Escada larga', 'Escada', 120, 400, stairShapes(120, 400)),
   def('circle', 'Círculo', 'Genéricos', 100, 100, [E(50, 50, 50, 50)]),
@@ -139,6 +141,6 @@ export const BUILTIN_BLOCKS: BlockDef[] = [
 ]
 
 /** Ordem de exibição das categorias de fábrica. */
-export const BUILTIN_CATEGORIES = ['Sala', 'Quarto', 'Cozinha', 'Banheiro', 'Área externa', 'Escada', 'Genéricos']
+export const BUILTIN_CATEGORIES = ['Sala', 'Quarto', 'Cozinha', 'Banheiro', 'Área externa', 'Escada', 'Estrutura', 'Genéricos']
 
 export const BUILTIN_BY_ID = new Map(BUILTIN_BLOCKS.map((b) => [b.id, b]))
