@@ -84,6 +84,7 @@ import { resolveBlock } from '@renderer/store/libraryStore'
 import { snapBlockToWalls } from '@renderer/lib/blockGeometry'
 import { BLOCK_DRAG_MIME } from '@renderer/components/LibraryPanel'
 import { computeWallGeometry } from './wallGeometry'
+import { GhostLevel } from './GhostLevel'
 
 /** Raio (px de tela) para "grudar" em extremidades de paredes existentes. */
 const SNAP_RADIUS_PX = 10
@@ -151,7 +152,7 @@ export function CanvasStage(): React.JSX.Element {
   const gestureRef = useRef<Gesture | null>(null)
   const palette = useCanvasPalette()
 
-  const { doc, tool, wallMode, roomMode, doorHinge, viewport, selectedIds, activeLayerId, canvasSize, editing, placingBlockId, placingRotation, calibratingImageId } =
+  const { doc, tool, wallMode, roomMode, doorHinge, viewport, selectedIds, activeLayerId, activeLevelId, canvasSize, editing, placingBlockId, placingRotation, calibratingImageId } =
     useEditorStore(
       useShallow((s) => ({
         doc: s.doc,
@@ -162,6 +163,7 @@ export function CanvasStage(): React.JSX.Element {
         viewport: s.viewport,
         selectedIds: s.selectedIds,
         activeLayerId: s.activeLayerId,
+        activeLevelId: s.activeLevelId,
         canvasSize: s.canvasSize,
         editing: s.editing,
         placingBlockId: s.placingBlockId,
@@ -173,6 +175,7 @@ export function CanvasStage(): React.JSX.Element {
     useShallow((s) => ({
       gridSize: s.gridSize,
       showGrid: s.showGrid,
+      ghostLevel: s.ghostLevel,
       snapEnabled: s.snapEnabled,
       wallThickness: s.wallThickness,
       doorWidth: s.doorWidth,
@@ -204,7 +207,11 @@ export function CanvasStage(): React.JSX.Element {
   const [panning, setPanning] = useState(false)
 
   // ------------------------------------------------------------ derivados
-  const visibleLayerIds = useMemo(() => new Set(doc.layers.filter((l) => l.visible).map((l) => l.id)), [doc.layers])
+  // Só as camadas do andar ativo participam de desenho, seleção e cotas.
+  const visibleLayerIds = useMemo(
+    () => new Set(doc.layers.filter((l) => l.visible && l.levelId === activeLevelId).map((l) => l.id)),
+    [doc.layers, activeLevelId]
+  )
   const visibleObjects = useMemo(
     () => doc.objects.filter((o) => visibleLayerIds.has(o.layerId)),
     [doc.objects, visibleLayerIds]
@@ -233,10 +240,14 @@ export function CanvasStage(): React.JSX.Element {
         : [],
     [visibleDims, wallsById, sides, viewport.scale, settings.showDimensions, settings.dimensionOffset, settings.dimensionStyle]
   )
+  const ghostLevelId = useMemo(() => {
+    const i = doc.levels.findIndex((l) => l.id === activeLevelId)
+    return settings.ghostLevel && i > 0 ? doc.levels[i - 1].id : null
+  }, [doc.levels, activeLevelId, settings.ghostLevel])
   const resolve = useCallback((id: string) => resolveBlock(id, doc), [doc])
   // Blocos selecionados e editáveis recebem o Transformer (girar/redimensionar).
   const transformIds = useMemo(() => {
-    const editable = editableLayerIds(doc)
+    const editable = editableLayerIds(doc, activeLevelId)
     return tool === 'select'
       ? doc.objects
           .filter(
@@ -248,7 +259,7 @@ export function CanvasStage(): React.JSX.Element {
           )
           .map((o) => o.id)
       : []
-  }, [doc, selectedSet, tool, visibleLayerIds])
+  }, [doc, selectedSet, tool, visibleLayerIds, activeLevelId])
   // Imagens mantêm a proporção ao redimensionar (Shift libera); blocos são livres (Shift trava).
   const transformKeepsRatio = transformIds.some((id) => doc.objects.find((o) => o.id === id)?.type === 'image')
   useEffect(() => {
@@ -491,7 +502,7 @@ export function CanvasStage(): React.JSX.Element {
   /** Inicia mover/deslizar/selecionar a partir de um clique em objeto (ferramenta Selecionar). */
   const startSelectGesture = (target: Konva.Node, world: Point, screen: Point, evt: MouseEvent): void => {
     const store = useEditorStore.getState()
-    const editable = editableLayerIds(store.doc)
+    const editable = editableLayerIds(store.doc, store.activeLevelId)
 
     // Alça de extremidade → redimensiona a parede (e as conectadas naquele ponto).
     if (target.hasName('endpoint-handle')) {
@@ -977,7 +988,7 @@ export function CanvasStage(): React.JSX.Element {
         setMarquee(null)
         if (!p || distance(p.screen, g.startScreen) < CLICK_TOLERANCE_PX) break
         const r = rectFromPoints(g.start, p.world)
-        const editable = editableLayerIds(store.doc)
+        const editable = editableLayerIds(store.doc, store.activeLevelId)
         const hits = store.doc.objects
           .filter((o) => editable.has(o.layerId) && objectHitsRect(o, r, wallsById, resolve))
           .map((o) => o.id)
@@ -1027,7 +1038,7 @@ export function CanvasStage(): React.JSX.Element {
   const selectedObj = selectedIds.length === 1 ? objectsById.get(selectedIds[0]) : undefined
   const singleSelectedWall = selectedObj?.type === 'wall' ? selectedObj : undefined
   const showHandles =
-    tool === 'select' && singleSelectedWall && editableLayerIds(doc).has(singleSelectedWall.layerId)
+    tool === 'select' && singleSelectedWall && editableLayerIds(doc, activeLevelId).has(singleSelectedWall.layerId)
   const gestureKind = gestureRef.current?.kind
   const segments = draft ? draftSegments(draft.a, draft.b, wallMode) : []
   const editingTextId = editing?.type === 'text' ? editing.id : null
@@ -1090,8 +1101,9 @@ export function CanvasStage(): React.JSX.Element {
 
           {/* 2. Conteúdo: um Group por camada do documento, na ordem definida */}
           <Layer>
+            {ghostLevelId && <GhostLevel doc={doc} levelId={ghostLevelId} palette={palette} scale={viewport.scale} resolve={resolve} />}
             {doc.layers.map((layer) => {
-              if (!layer.visible) return null
+              if (!layer.visible || layer.levelId !== activeLevelId) return null
               const objs = visibleObjects.filter((o) => o.layerId === layer.id)
               const common = { palette, scale: viewport.scale, selected: selectedSet, hoveredId }
               return (

@@ -13,6 +13,7 @@ import { OnboardingHost } from './components/Onboarding'
 import { useLibraryStore } from './store/libraryStore'
 import { Toolbar } from './components/Toolbar'
 import { ToolOptionsBar } from './components/ToolOptionsBar'
+import { LevelBar } from './components/LevelBar'
 import { useShortcuts } from './hooks/useShortcuts'
 import { useResolvedTheme } from './theme'
 import { useEditorStore, useIsDirty } from './store/editorStore'
@@ -63,6 +64,7 @@ export function App(): React.JSX.Element {
             </Suspense>
           )}
         </div>
+        <LevelBar />
       </main>
       <RightPanel />
       <StatusBar />

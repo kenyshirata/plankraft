@@ -218,7 +218,7 @@ function ExportPdfDialog(): React.JSX.Element {
                       checked={layerIds.includes(l.id)}
                       onChange={(e) => setLayerIds((ids) => (e.target.checked ? [...ids, l.id] : ids.filter((x) => x !== l.id)))}
                     />
-                    {l.name}
+                    {doc.levels.length > 1 ? `${doc.levels.find((lv) => lv.id === l.levelId)?.name ?? ''} · ${l.name}` : l.name}
                   </label>
                 ))}
             </div>

@@ -1,7 +1,7 @@
 /**
  * Ações de edição reutilizadas pelo canvas, menu de contexto e painel de propriedades.
  */
-import { findLayerByRole, newId, type Id, type PlanDocument, type Point, type RoomObject, type WallDimension } from '@shared/model'
+import { findLayerByRole, levelIdOfObject, newId, type Id, type PlanDocument, type Point, type RoomObject, type WallDimension } from '@shared/model'
 import { polygonArea, polygonCentroid } from '@renderer/lib/geometry'
 import { detectRoomAt } from '@renderer/lib/rooms'
 import { addObjects, updateObject, wallsOf } from './docOps'
@@ -39,7 +39,7 @@ export function refreshRoomFromWalls(id: Id): void {
   const visible = new Set(doc.layers.filter((l) => l.visible).map((l) => l.id))
   const detected = detectRoomAt(
     polygonCentroid(room.points),
-    wallsOf(doc).filter((w) => visible.has(w.layerId))
+    wallsOf(doc, levelIdOfObject(doc, room)).filter((w) => visible.has(w.layerId))
   )
   if (!detected) {
     toast.warning('Não encontrei paredes fechando este cômodo.')
@@ -53,8 +53,11 @@ export function refreshRoomFromWalls(id: Id): void {
 
 /** Cria cotas associadas para as paredes informadas (na camada "Cotas", se existir). */
 export function wallDimensionsFor(doc: PlanDocument, walls: { id: Id; layerId: Id }[]): WallDimension[] {
-  const layerId = findLayerByRole(doc, 'dimensions')?.id
-  return walls.map((w) => ({ id: newId(), type: 'dimension', kind: 'wall', wallId: w.id, layerId: layerId ?? w.layerId, offset: null }))
+  return walls.map((w) => {
+    const level = doc.layers.find((l) => l.id === w.layerId)?.levelId
+    const layerId = findLayerByRole(doc, 'dimensions', level)?.id
+    return { id: newId(), type: 'dimension', kind: 'wall', wallId: w.id, layerId: layerId ?? w.layerId, offset: null }
+  })
 }
 
 /** "Gerar Cotas Automáticas": cria a cota de toda parede que ainda não tem uma. */
@@ -63,7 +66,7 @@ export function generateMissingDimensions(): number {
   const dimensioned = new Set(
     doc.objects.filter((o): o is WallDimension => o.type === 'dimension' && o.kind === 'wall').map((d) => d.wallId)
   )
-  const missing = wallsOf(doc).filter((w) => !dimensioned.has(w.id))
+  const missing = wallsOf(doc, useEditorStore.getState().activeLevelId).filter((w) => !dimensioned.has(w.id))
   if (missing.length === 0) {
     toast.info('Todas as paredes já têm cota.')
     return 0

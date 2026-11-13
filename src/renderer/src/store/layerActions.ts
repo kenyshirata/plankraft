@@ -32,7 +32,8 @@ export function createLayer(): Id {
     visible: true,
     locked: false,
     opacity: 1,
-    color: null
+    color: null,
+    levelId: st().activeLevelId
   }
   commit((d) => insertLayer(d, layer, activeLayerId))
   setActiveLayer(layer.id)
@@ -72,14 +73,15 @@ export async function deleteLayer(id: Id): Promise<void> {
   const { doc } = st()
   const layer = doc.layers.find((l) => l.id === id)
   if (!layer) return
-  if (doc.layers.length <= 1) {
-    toast.warning('O projeto precisa ter pelo menos uma camada.')
+  const siblings = doc.layers.filter((l) => l.levelId === layer.levelId)
+  if (siblings.length <= 1) {
+    toast.warning('O andar precisa ter pelo menos uma camada.')
     return
   }
   const count = doc.objects.filter((o) => o.layerId === id).length
   // Destino sugerido para os objetos: a camada logo abaixo (ou acima, se for a última).
-  const idx = doc.layers.findIndex((l) => l.id === id)
-  const target = doc.layers[idx - 1] ?? doc.layers[idx + 1]
+  const idx = siblings.findIndex((l) => l.id === id)
+  const target = siblings[idx - 1] ?? siblings[idx + 1]
 
   let moveTo: Id | undefined
   if (count > 0) {
@@ -112,7 +114,8 @@ export function reorderLayer(id: Id, targetId: Id, place: 'front' | 'back'): voi
 
 /** Sobe/desce uma posição (para frente = +1). */
 export function nudgeLayer(id: Id, direction: 1 | -1): void {
-  const layers = st().doc.layers
+  const self = st().doc.layers.find((l) => l.id === id)
+  const layers = st().doc.layers.filter((l) => l.levelId === self?.levelId)
   const i = layers.findIndex((l) => l.id === id)
   const neighbor = layers[i + direction]
   if (neighbor) reorderLayer(id, neighbor.id, direction === 1 ? 'front' : 'back')

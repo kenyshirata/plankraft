@@ -5,9 +5,12 @@
  */
 import {
   createDefaultLayers,
+  createLevel,
+  DEFAULT_LEVEL_HEIGHT,
   hostWallId,
   newId,
   type Layer,
+  type Level,
   type PlanDocument,
   type PlanObject,
   type Point,
@@ -37,6 +40,7 @@ function normalizeLayer(v: unknown): Layer | null {
   return {
     id: str(v.id, newId()),
     name: str(v.name, 'Camada'),
+    levelId: typeof v.levelId === 'string' ? v.levelId : undefined,
     visible: v.visible !== false,
     locked: v.locked === true,
     opacity: Math.min(1, Math.max(0, num(v.opacity, 1))),
@@ -153,8 +157,31 @@ export function parseProject(raw: unknown, fallbackName: string): PlanDocument {
   if (!isRec(data) || !Array.isArray(data.objects)) {
     throw new Error('O arquivo não parece ser um projeto PlanKraft válido.')
   }
+  // Andares: arquivos antigos (sem andares) viram um único "Térreo".
+  let levels: Level[] = Array.isArray(data.levels)
+    ? data.levels.flatMap((v): Level[] =>
+        isRec(v)
+          ? [
+              {
+                id: str(v.id, newId()),
+                name: str(v.name, 'Andar'),
+                elevation: num(v.elevation, 0),
+                height: Math.max(100, num(v.height, DEFAULT_LEVEL_HEIGHT))
+              }
+            ]
+          : []
+      )
+    : []
+  if (levels.length === 0) levels = [createLevel('Térreo', 0)]
+  const firstLevel = levels[0].id
+  const levelIds = new Set(levels.map((l) => l.id))
   let layers = Array.isArray(data.layers) ? data.layers.map(normalizeLayer).filter((l): l is Layer => l !== null) : []
-  if (layers.length === 0) layers = createDefaultLayers()
+  if (layers.length === 0) layers = createDefaultLayers(firstLevel)
+  layers = layers.map((l) => (l.levelId && levelIds.has(l.levelId) ? l : { ...l, levelId: firstLevel }))
+  // Todo andar precisa ter camadas próprias.
+  for (const lv of levels) {
+    if (!layers.some((l) => l.levelId === lv.id)) layers = [...layers, ...createDefaultLayers(lv.id)]
+  }
   const layerIds = new Set(layers.map((l) => l.id))
   const fallbackLayer = (layers.find((l) => l.role === 'walls') ?? layers[layers.length - 1]).id
 
@@ -175,6 +202,7 @@ export function parseProject(raw: unknown, fallbackName: string): PlanDocument {
     name: str(data.name, fallbackName),
     createdAt: str(data.createdAt, now),
     updatedAt: str(data.updatedAt, now),
+    levels,
     layers,
     objects,
     blocks: Array.isArray(data.blocks)

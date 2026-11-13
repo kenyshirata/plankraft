@@ -93,6 +93,8 @@ interface EditorState {
   wallMode: WallMode
   roomMode: RoomMode
   activeLayerId: Id
+  /** Andar em edição. */
+  activeLevelId: Id
   selectedIds: Id[]
   doorHinge: 'start' | 'end'
   /** Aba do painel esquerdo. */
@@ -129,6 +131,7 @@ interface EditorState {
   setTool(tool: ToolId): void
   setWallMode(mode: WallMode): void
   setRoomMode(mode: RoomMode): void
+  setActiveLevel(levelId: Id): void
   setActiveLayer(id: Id): void
   select(ids: Id[]): void
   toggleSelection(id: Id): void
@@ -174,13 +177,18 @@ const keepExisting = (ids: Id[], doc: PlanDocument): Id[] => {
   return ids.filter((id) => existing.has(id))
 }
 
-function defaultActiveLayer(doc: PlanDocument): Id {
-  return (findLayerByRole(doc, 'walls') ?? doc.layers[doc.layers.length - 1]).id
+function defaultActiveLayer(doc: PlanDocument, levelId?: Id): Id {
+  const own = levelId ? doc.layers.filter((l) => l.levelId === levelId) : doc.layers
+  const pool = own.length ? own : doc.layers
+  return (pool.find((l) => l.role === 'walls') ?? pool[pool.length - 1]).id
 }
 
-/** Mantém a camada ativa válida (ela pode deixar de existir após undo/redo). */
-const validActiveLayer = (id: Id, doc: PlanDocument): Id =>
-  doc.layers.some((l) => l.id === id) ? id : defaultActiveLayer(doc)
+/** Mantém o andar ativo válido (ele pode deixar de existir após undo/redo). */
+const validActiveLevel = (id: Id, doc: PlanDocument): Id => (doc.levels.some((l) => l.id === id) ? id : doc.levels[0].id)
+
+/** Mantém a camada ativa válida (ela pode deixar de existir após undo/redo) e do andar ativo. */
+const validActiveLayer = (id: Id, doc: PlanDocument, levelId: Id): Id =>
+  doc.layers.some((l) => l.id === id && l.levelId === levelId) ? id : defaultActiveLayer(doc, levelId)
 
 /**
  * Visibilidade, bloqueio e opacidade não fazem parte do histórico. Ao desfazer/refazer,
@@ -223,7 +231,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
   tool: 'select',
   wallMode: 'line',
   roomMode: 'detect',
-  activeLayerId: defaultActiveLayer(initialDoc),
+  activeLayerId: defaultActiveLayer(initialDoc, initialDoc.levels[0].id),
+  activeLevelId: initialDoc.levels[0].id,
   selectedIds: [],
   doorHinge: 'start',
   leftTab: 'layers',
@@ -265,12 +274,14 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     set((s) => {
       if (s.gestureBase || s.past.length === 0) return s
       const prev = keepLayerView(s.past[s.past.length - 1], s.doc)
+      const level = validActiveLevel(s.activeLevelId, prev)
       return {
         doc: prev,
         past: s.past.slice(0, -1),
         future: [s.doc, ...s.future],
         selectedIds: keepExisting(s.selectedIds, prev),
-        activeLayerId: validActiveLayer(s.activeLayerId, prev),
+        activeLevelId: level,
+        activeLayerId: validActiveLayer(s.activeLayerId, prev, level),
         editing: null
       }
     }),
@@ -280,12 +291,14 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       if (s.gestureBase || s.future.length === 0) return s
       const [head, ...rest] = s.future
       const next = keepLayerView(head, s.doc)
+      const level = validActiveLevel(s.activeLevelId, next)
       return {
         doc: next,
         past: pushLimited(s.past, s.doc),
         future: rest,
         selectedIds: keepExisting(s.selectedIds, next),
-        activeLayerId: validActiveLayer(s.activeLayerId, next),
+        activeLevelId: level,
+        activeLayerId: validActiveLayer(s.activeLayerId, next, level),
         editing: null
       }
     }),
@@ -304,7 +317,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       gestureBase: null,
       selectedIds: [],
       editing: null,
-      activeLayerId: defaultActiveLayer(doc)
+      activeLevelId: doc.levels[0].id,
+      activeLayerId: defaultActiveLayer(doc, doc.levels[0].id)
     })
     get().zoomToFit()
   },
@@ -318,14 +332,14 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
   // ---------------------------------------------------------------------- UI
   setTool: (tool) => {
     const role = TOOL_LAYER_ROLE[tool]
-    const { doc, activeLayerId } = get()
+    const { doc, activeLayerId, activeLevelId } = get()
     const patch: Partial<EditorState> = { tool, editing: null }
     // Ferramenta Blocos abre a biblioteca; sair dela cancela a inserção pendente.
     if (tool === 'block') patch.leftTab = 'blocks'
     else patch.placingBlockId = null
     // Troca automática de camada (ex.: Porta → "Portas e Janelas").
     if (role && useSettingsStore.getState().autoLayerByTool) {
-      const layer = findLayerByRole(doc, role)
+      const layer = findLayerByRole(doc, role, activeLevelId)
       if (layer && layer.id !== activeLayerId) patch.activeLayerId = layer.id
     }
     set(patch)
@@ -333,6 +347,17 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
   setWallMode: (wallMode) => set({ wallMode }),
   setRoomMode: (roomMode) => set({ roomMode }),
   setActiveLayer: (activeLayerId) => set({ activeLayerId }),
+  setActiveLevel: (levelId) =>
+    set((s) => {
+      if (levelId === s.activeLevelId || !s.doc.levels.some((l) => l.id === levelId)) return s
+      return {
+        activeLevelId: levelId,
+        activeLayerId: defaultActiveLayer(s.doc, levelId),
+        selectedIds: [],
+        editing: null,
+        placingBlockId: null
+      }
+    }),
 
   select: (ids) => set({ selectedIds: ids }),
   toggleSelection: (id) =>
@@ -342,7 +367,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
   clearSelection: () => set((s) => (s.selectedIds.length ? { selectedIds: [] } : s)),
   selectAll: () =>
     set((s) => {
-      const editable = editableLayerIds(s.doc)
+      const editable = editableLayerIds(s.doc, s.activeLevelId)
       return { selectedIds: s.doc.objects.filter((o) => editable.has(o.layerId)).map((o) => o.id) }
     }),
 
@@ -383,7 +408,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     const { doc, canvasSize } = get()
     if (canvasSize.width === 0 || canvasSize.height === 0) return
     const walls = new Map(wallsOf(doc).map((w) => [w.id, w]))
-    const points = doc.objects.flatMap((o) => objectPoints(o, walls))
+    const levelLayers = new Set(doc.layers.filter((l) => l.levelId === get().activeLevelId).map((l) => l.id))
+    const points = doc.objects.filter((o) => levelLayers.has(o.layerId)).flatMap((o) => objectPoints(o, walls))
     // Documento vazio: enquadra uma área de 12 × 8 m a partir da origem.
     const b = boundsOf(points) ?? { x: 0, y: 0, width: 1200, height: 800 }
     const pad = 80
@@ -418,8 +444,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
 
   paste: () => {
     if (!clipboard) return
-    const { doc } = get()
-    const editable = editableLayerIds(doc)
+    const { doc, activeLevelId } = get()
+    const editable = editableLayerIds(doc, activeLevelId)
     clipboard.pastes++
     const offset = { x: PASTE_OFFSET * clipboard.pastes, y: PASTE_OFFSET * clipboard.pastes }
     // Objetos de camadas que não existem mais / bloqueadas vão para a camada ativa.

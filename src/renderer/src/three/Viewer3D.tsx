@@ -53,7 +53,10 @@ export default function Viewer3D(): React.JSX.Element {
   // Libera as geometrias antigas quando a cena é reconstruída.
   useEffect(
     () => () => {
-      scene.floors.forEach((f) => f.geometry.dispose())
+      scene.floors.forEach((f) => {
+        f.geometry.dispose()
+        f.slab?.dispose()
+      })
       scene.furniture.forEach((f) => f.geometry.dispose())
     },
     [scene]
@@ -246,7 +249,7 @@ function SceneContent({ scene, shadows, labels, dark }: { scene: Scene3D; shadow
 
       {labels &&
         scene.floors.map((f) => (
-          <Html key={`l-${f.id}`} position={[f.center[0], 0.05, f.center[1]]} center zIndexRange={[10, 0]} className="viewer3d__label">
+          <Html key={`l-${f.id}`} position={[f.center[0], f.elevation + 0.05, f.center[1]]} center zIndexRange={[10, 0]} className="viewer3d__label">
             <strong>{f.name}</strong>
             <span>{formatNumber(f.area, 2)} m²</span>
           </Html>
@@ -275,7 +278,7 @@ function BackgroundPlane({ im }: { im: Scene3D['images'][number] }): React.JSX.E
   }, [im.image])
   useEffect(() => () => texture.dispose(), [texture])
   return (
-    <mesh position={[im.center[0], 0.001, im.center[1]]} rotation={[-Math.PI / 2, 0, im.rotationY]} receiveShadow>
+    <mesh position={[im.center[0], im.y + 0.001, im.center[1]]} rotation={[-Math.PI / 2, 0, im.rotationY]} receiveShadow>
       <planeGeometry args={[im.width, im.height]} />
       <meshStandardMaterial map={texture} transparent opacity={im.opacity} roughness={1} />
     </mesh>
@@ -315,9 +318,16 @@ function FloorMesh({ f }: { f: Scene3D['floors'][number] }): React.JSX.Element {
   const k = 1 / tileMeters(f.texture)
   const map = useMaterialTexture(f.texture, k, k)
   return (
-    <mesh geometry={f.geometry} position={[0, 0.003, 0]} receiveShadow>
-      <meshStandardMaterial color={map ? '#ffffff' : f.color} map={map} roughness={0.9} side={THREE.DoubleSide} />
-    </mesh>
+    <>
+      <mesh geometry={f.geometry} position={[0, 0.003, 0]} receiveShadow>
+        <meshStandardMaterial color={map ? '#ffffff' : f.color} map={map} roughness={0.9} side={THREE.DoubleSide} />
+      </mesh>
+      {f.slab && (
+        <mesh geometry={f.slab} castShadow receiveShadow>
+          <meshStandardMaterial color="#d9d6d0" roughness={0.95} />
+        </mesh>
+      )}
+    </>
   )
 }
 

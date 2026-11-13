@@ -18,6 +18,18 @@ function def(id: string, name: string, category: string, width: number, height: 
 
 // ---------------------------------------------------------------- helpers
 
+/** Escada reta: sobe em direção a Y=0 (seta e "SOBE"); degraus de ~25 cm. */
+function stairShapes(width: number, length: number): BlockShape[] {
+  const treads = Math.round(length / 25)
+  const step = length / treads
+  const shapes: BlockShape[] = [R(0, 0, width, length)]
+  for (let i = 1; i < treads; i++) shapes.push(L(0, i * step, width, i * step, { weight: 0.6 }))
+  const cx = width / 2
+  shapes.push(L(cx, length - 30, cx, 40, { weight: 1 }), P([cx - 10, 58, cx, 38, cx + 10, 58], false, { weight: 1 }))
+  shapes.push({ kind: 'text', x: cx, y: length - 24, text: 'SOBE', size: 11, align: 'center', fill: 'ink' })
+  return shapes
+}
+
 /** Sofá com N assentos: encosto atrás, braços laterais, almofadas. */
 function sofa(seats: number, width: number, depth = 90): BlockShape[] {
   const arm = 18
@@ -113,6 +125,8 @@ export const BUILTIN_BLOCKS: BlockDef[] = [
   def('bbq', 'Churrasqueira', 'Área externa', 100, 60, [R(0, 0, 100, 60, { r: 2 }), R(10, 8, 80, 40, { fill: 'none' }), ...[18, 26, 34, 42, 50, 58, 66, 74, 82].map((x) => L(x, 10, x, 46, { weight: 0.5 }))]),
 
   // ---------------------------------------------------------------- Genéricos
+  def('stair-straight', 'Escada reta', 'Escada', 90, 400, stairShapes(90, 400)),
+  def('stair-wide', 'Escada larga', 'Escada', 120, 400, stairShapes(120, 400)),
   def('circle', 'Círculo', 'Genéricos', 100, 100, [E(50, 50, 50, 50)]),
   def('rectangle', 'Retângulo', 'Genéricos', 100, 60, [R(0, 0, 100, 60)]),
   def('door-std', 'Porta padrão', 'Genéricos', 80, 80, [L(0, 0, 0, 80, { weight: 1.6 }), A(0, 0, 80, 0, 90, { dash: true, weight: 0.7 }), L(0, 0, 80, 0, { weight: 0.6 })]),
@@ -125,6 +139,6 @@ export const BUILTIN_BLOCKS: BlockDef[] = [
 ]
 
 /** Ordem de exibição das categorias de fábrica. */
-export const BUILTIN_CATEGORIES = ['Sala', 'Quarto', 'Cozinha', 'Banheiro', 'Área externa', 'Genéricos']
+export const BUILTIN_CATEGORIES = ['Sala', 'Quarto', 'Cozinha', 'Banheiro', 'Área externa', 'Escada', 'Genéricos']
 
 export const BUILTIN_BY_ID = new Map(BUILTIN_BLOCKS.map((b) => [b.id, b]))

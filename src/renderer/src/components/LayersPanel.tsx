@@ -47,7 +47,9 @@ interface DragState {
 }
 
 export function LayersPanel(): React.JSX.Element {
-  const layers = useEditorStore((s) => s.doc.layers)
+  const allLayers = useEditorStore((s) => s.doc.layers)
+  const levelId = useEditorStore((s) => s.activeLevelId)
+  const layers = useMemo(() => allLayers.filter((l) => l.levelId === levelId), [allLayers, levelId])
   const objects = useEditorStore((s) => s.doc.objects)
   const activeLayerId = useEditorStore((s) => s.activeLayerId)
   const hasSelection = useEditorStore((s) => s.selectedIds.length > 0)

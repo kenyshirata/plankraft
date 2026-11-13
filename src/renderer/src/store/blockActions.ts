@@ -20,7 +20,7 @@ const st = useEditorStore.getState
 /** Camada para novos blocos: "Móveis" (se a troca automática estiver ligada) ou a ativa. */
 function targetLayerId(): Id | null {
   const { doc, activeLayerId } = st()
-  const furniture = findLayerByRole(doc, 'furniture')
+  const furniture = findLayerByRole(doc, 'furniture', st().activeLevelId)
   const id = useSettingsStore.getState().autoLayerByTool && furniture ? furniture.id : activeLayerId
   const layer = doc.layers.find((l) => l.id === id)
   if (!layer) return null
@@ -34,7 +34,7 @@ function targetLayerId(): Id | null {
 function visibleWalls(): WallObject[] {
   const { doc } = st()
   const visible = new Set(doc.layers.filter((l) => l.visible).map((l) => l.id))
-  return wallsOf(doc).filter((w) => visible.has(w.layerId))
+  return wallsOf(doc, st().activeLevelId).filter((w) => visible.has(w.layerId))
 }
 
 /** Instância "fantasma" na posição dada, já encaixada na parede mais próxima (se houver). */

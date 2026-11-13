@@ -206,14 +206,31 @@ export function computeLayout(doc: PlanDocument, opts: PdfOptions, ctx: PdfConte
 
 // ------------------------------------------------------------------ desenho
 
+/** PDF com uma folha por andar que tenha conteúdo selecionado (mesma escala e enquadramento em todas). */
 export function buildPdf(doc: PlanDocument, opts: PdfOptions, ctx: PdfContext): jsPDF {
   const L = computeLayout(doc, opts, ctx)
-  const pdf = new jsPDF({ unit: 'mm', format: [L.pageW, L.pageH], orientation: L.pageW > L.pageH ? 'landscape' : 'portrait', compress: true })
+  const orientation = L.pageW > L.pageH ? 'landscape' : 'portrait'
+  const pdf = new jsPDF({ unit: 'mm', format: [L.pageW, L.pageH], orientation, compress: true })
   pdf.setProperties({ title: opts.projectName || doc.name, author: opts.author, creator: 'PlanKraft' })
   pdf.setFont('helvetica', 'normal')
   pdf.setLineJoin('round')
   pdf.setLineCap('round')
 
+  const pages = doc.levels
+    .map((level) => ({
+      level,
+      layerIds: opts.layerIds.filter((id) => doc.layers.find((l) => l.id === id)?.levelId === level.id)
+    }))
+    .filter((p) => doc.objects.some((o) => p.layerIds.includes(o.layerId)))
+  const list = pages.length ? pages : [{ level: doc.levels[0], layerIds: opts.layerIds }]
+  list.forEach((p, i) => {
+    if (i > 0) pdf.addPage([L.pageW, L.pageH], orientation)
+    drawPdfPage(pdf, L, doc, { ...opts, layerIds: p.layerIds }, ctx, doc.levels.length > 1 ? p.level.name : null)
+  })
+  return pdf
+}
+
+function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptions, ctx: PdfContext, levelName: string | null): void {
   const cx = L.bounds.x + L.bounds.width / 2
   const cy = L.bounds.y + L.bounds.height / 2
   const ax = L.area.x + L.area.width / 2
@@ -349,7 +366,7 @@ export function buildPdf(doc: PlanDocument, opts: PdfOptions, ctx: PdfContext): 
 
   if (L.legendArea) drawLegend(L.legendArea)
   if (L.titleArea) drawTitleBlock(L.titleArea)
-  return pdf
+  return
 
   // ================================================================ objetos
 
@@ -584,7 +601,7 @@ export function buildPdf(doc: PlanDocument, opts: PdfOptions, ctx: PdfContext): 
     pdf.rect(r.x, r.y, r.width, r.height)
     const scaleText = opts.scale === 'fit' ? `1:${Math.round(L.scaleDen)} (ajustada)` : `1:${opts.scale}`
     const cells: [string, string, number][] = [
-      ['PROJETO', opts.projectName || doc.name, 0.4],
+      ['PROJETO', `${opts.projectName || doc.name}${levelName ? ` — ${levelName}` : ''}`, 0.4],
       ['AUTOR', opts.author || '—', 0.22],
       ['DATA', opts.date || '—', 0.13],
       ['ESCALA', scaleText, 0.13],

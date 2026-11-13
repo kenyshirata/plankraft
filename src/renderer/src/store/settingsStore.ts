@@ -32,6 +32,8 @@ export interface Settings {
   // --- cotas ---
   /** Mostrar/ocultar todas as cotas (Ctrl+Shift+C). */
   showDimensions: boolean
+  /** Mostra o andar de baixo esmaecido ao editar um andar superior. */
+  ghostLevel: boolean
   /** 'architectural' = linha externa à parede; 'linear' = sobre a parede. */
   dimensionStyle: DimensionStyle
   /** Distância (px de tela) entre a face da parede e a linha de cota. */
@@ -60,7 +62,7 @@ export type CornerAngleMode = 'off' | 'non-right' | 'all'
 interface SettingsState extends Settings {
   set<K extends keyof Settings>(key: K, value: Settings[K]): void
   toggle(
-    key: 'showGrid' | 'snapEnabled' | 'autoLayerByTool' | 'showDimensions' | 'autoDimensions' | 'cutaway3d' | 'labels3d' | 'shadows3d' | 'background3d'
+    key: 'showGrid' | 'snapEnabled' | 'autoLayerByTool' | 'showDimensions' | 'ghostLevel' | 'autoDimensions' | 'cutaway3d' | 'labels3d' | 'shadows3d' | 'background3d'
   ): void
 }
 
@@ -77,6 +79,7 @@ export const DEFAULT_SETTINGS: Settings = {
   textSize: 25,
   autoLayerByTool: true,
   showDimensions: true,
+  ghostLevel: true,
   dimensionStyle: 'architectural',
   dimensionOffset: 20,
   autoDimensions: true,

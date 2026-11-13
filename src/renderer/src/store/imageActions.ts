@@ -27,8 +27,8 @@ export async function importBackgroundImage(): Promise<void> {
     const result = await window.api.importImage()
     if (!result) return
     const img = await useAssetStore.getState().put(result.key, result.dataUrl)
-    const { doc, viewport, canvasSize, activeLayerId, commit, select, setTool } = st()
-    const layer = findLayerByRole(doc, 'background') ?? doc.layers.find((l) => l.id === activeLayerId)!
+    const { doc, viewport, canvasSize, activeLayerId, activeLevelId, commit, select, setTool } = st()
+    const layer = findLayerByRole(doc, 'background', activeLevelId) ?? doc.layers.find((l) => l.id === activeLayerId)!
     const center: Point = {
       x: (canvasSize.width / 2 - viewport.x) / viewport.scale,
       y: (canvasSize.height / 2 - viewport.y) / viewport.scale

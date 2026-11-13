@@ -48,7 +48,9 @@ type Phase = { kind: 'idle' } | { kind: 'loading'; started: number } | { kind: '
 export async function applyVariant(v: AiVariantT): Promise<boolean> {
   const { doc, commit, zoomToFit, select } = useEditorStore.getState()
   let mode: 'replace' | 'add' = 'replace'
-  if (doc.objects.length) {
+  const activeLevel = useEditorStore.getState().activeLevelId
+  const activeLayerIds = new Set(doc.layers.filter((l) => l.levelId === activeLevel).map((l) => l.id))
+  if (doc.objects.some((o) => activeLayerIds.has(o.layerId))) {
     const choice = await askDialog({
       title: 'Usar esta planta',
       message: 'O desenho atual não está vazio. Deseja substituí-lo pela planta gerada ou colocá-la ao lado?',
@@ -61,11 +63,17 @@ export async function applyVariant(v: AiVariantT): Promise<boolean> {
     if (choice !== 'replace' && choice !== 'add') return false
     mode = choice
   }
+  const levelId = useEditorStore.getState().activeLevelId
+  const levelLayerIds = new Set(doc.layers.filter((l) => l.levelId === levelId).map((l) => l.id))
   const walls = new Map(wallsOf(doc).map((w) => [w.id, w]))
-  const b = mode === 'add' ? boundsOf(doc.objects.flatMap((o) => objectPoints(o, walls))) : null
+  const b = mode === 'add' ? boundsOf(doc.objects.filter((o) => levelLayerIds.has(o.layerId)).flatMap((o) => objectPoints(o, walls))) : null
   const origin = b ? { x: b.x + b.width + 300, y: b.y } : { x: 0, y: 0 }
-  const built = buildPlanFromVariant(v, doc, origin)
-  commit((d) => ({ ...d, objects: mode === 'replace' ? built.objects : [...d.objects, ...built.objects] }))
+  const built = buildPlanFromVariant(v, doc, origin, levelId)
+  // "Substituir" troca só o conteúdo do andar ativo; os outros andares ficam intactos.
+  commit((d) => ({
+    ...d,
+    objects: mode === 'replace' ? [...d.objects.filter((o) => !levelLayerIds.has(o.layerId)), ...built.objects] : [...d.objects, ...built.objects]
+  }))
   select([])
   zoomToFit()
   toast.success(`“${v.title}” aplicada — ${formatNumber(built.area / 10000, 1)} m² úteis. Tudo é editável (Ctrl+Z desfaz).`)

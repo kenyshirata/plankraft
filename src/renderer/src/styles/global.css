@@ -2008,3 +2008,81 @@ kbd {
   min-width: 60px;
   font-size: 12px;
 }
+
+/* ---------------------------------------------------------------- andares */
+.level-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 10px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.level-bar__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.level-bar__tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.level-bar__tab,
+.level-bar__add {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.level-bar__tab:hover,
+.level-bar__add:hover {
+  color: var(--text);
+}
+.level-bar__tab.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.level-bar__add {
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+}
+.level-bar__rename {
+  width: 110px;
+  height: 26px;
+}
+.level-bar__sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+.level-bar__height {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.level-bar__height .number-field,
+.level-bar__height input {
+  width: 64px;
+}

@@ -26,9 +26,27 @@ export type LengthUnit = 'm' | 'cm' | 'mm'
  */
 export type LayerRole = 'walls' | 'openings' | 'rooms' | 'dimensions' | 'furniture' | 'text' | 'background'
 
+/**
+ * Pavimento (andar). Cada camada pertence a um andar (`Layer.levelId`) e os
+ * objetos pertencem ao andar da sua camada — assim tudo que já filtra por
+ * camada continua funcionando por andar.
+ */
+export interface Level {
+  id: Id
+  name: string
+  /** Cota do piso do andar, em cm (térreo = 0). */
+  elevation: number
+  /** Altura de piso a piso, em cm. */
+  height: number
+}
+
+export const DEFAULT_LEVEL_HEIGHT = 300
+
 export interface Layer {
   id: Id
   name: string
+  /** Andar a que a camada pertence. */
+  levelId?: Id
   visible: boolean
   locked: boolean
   /** 0..1 */
@@ -188,6 +206,8 @@ export interface PlanDocument {
   updatedAt: string
   /** Ordem do array = ordem de renderização (índice 0 = mais ao fundo). */
   layers: Layer[]
+  /** Andares, do mais baixo para o mais alto (sempre pelo menos um). */
+  levels: Level[]
   objects: PlanObject[]
   /**
    * Definições dos blocos PERSONALIZADOS usados no projeto (cópia embutida),
@@ -208,8 +228,8 @@ export function hostWallId(o: PlanObject): Id | null {
 }
 
 /** Camadas padrão de um projeto novo, da mais ao fundo para a mais à frente. */
-export function createDefaultLayers(): Layer[] {
-  const base = { visible: true, locked: false, opacity: 1, color: null }
+export function createDefaultLayers(levelId?: Id): Layer[] {
+  const base = { visible: true, locked: false, opacity: 1, color: null, levelId }
   return [
     { ...base, id: newId(), name: 'Imagem de Fundo', role: 'background' },
     { ...base, id: newId(), name: 'Cômodos', role: 'rooms' },
@@ -223,20 +243,37 @@ export function createDefaultLayers(): Layer[] {
 
 export function createEmptyDocument(name = 'Projeto sem título'): PlanDocument {
   const now = new Date().toISOString()
+  const level = createLevel('Térreo', 0)
   return {
     schemaVersion: 1,
     id: newId(),
     name,
     createdAt: now,
     updatedAt: now,
-    layers: createDefaultLayers(),
+    levels: [level],
+    layers: createDefaultLayers(level.id),
     objects: [],
     blocks: []
   }
 }
 
-export function findLayerByRole(doc: PlanDocument, role: LayerRole): Layer | undefined {
-  return doc.layers.find((l) => l.role === role)
+export function createLevel(name: string, elevation: number, height = DEFAULT_LEVEL_HEIGHT): Level {
+  return { id: newId(), name, elevation, height }
+}
+
+/** Camada da função `role` no andar `levelId` (sem andar: a primeira de qualquer andar). */
+export function findLayerByRole(doc: PlanDocument, role: LayerRole, levelId?: Id): Layer | undefined {
+  return doc.layers.find((l) => l.role === role && (!levelId || l.levelId === levelId))
+}
+
+/** Camadas de um andar, na ordem do documento. */
+export function layersOfLevel(doc: PlanDocument, levelId: Id): Layer[] {
+  return doc.layers.filter((l) => l.levelId === levelId)
+}
+
+/** Andar de um objeto (pela camada dele). */
+export function levelIdOfObject(doc: PlanDocument, o: PlanObject): Id | undefined {
+  return doc.layers.find((l) => l.id === o.layerId)?.levelId
 }
 
 // ------------------------------------------------------------ arquivo .plankraft

@@ -88,12 +88,14 @@ export function layerById(doc: PlanDocument, id: Id): Layer | undefined {
 }
 
 /** Camadas cujos objetos podem ser selecionados/editados (visíveis e desbloqueadas). */
-export function editableLayerIds(doc: PlanDocument): Set<Id> {
-  return new Set(doc.layers.filter((l) => l.visible && !l.locked).map((l) => l.id))
+export function editableLayerIds(doc: PlanDocument, levelId?: Id): Set<Id> {
+  return new Set(doc.layers.filter((l) => l.visible && !l.locked && (!levelId || l.levelId === levelId)).map((l) => l.id))
 }
 
-export function wallsOf(doc: PlanDocument): WallObject[] {
-  return doc.objects.filter((o): o is WallObject => o.type === 'wall')
+/** Paredes do documento; com `levelId`, só as do andar (pela camada). */
+export function wallsOf(doc: PlanDocument, levelId?: Id): WallObject[] {
+  const ids = levelId ? new Set(doc.layers.filter((l) => l.levelId === levelId).map((l) => l.id)) : null
+  return doc.objects.filter((o): o is WallObject => o.type === 'wall' && (!ids || ids.has(o.layerId)))
 }
 
 /** Pontos de referência de um objeto (para enquadrar, seleção etc.). */

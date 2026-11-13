@@ -102,10 +102,11 @@ export interface BuiltPlan {
 }
 
 /** Gera os objetos da variação, deslocados por `origin` (cm). */
-export function buildPlanFromVariant(v: AiVariantT, doc: PlanDocument, origin: Point = { x: 0, y: 0 }): BuiltPlan {
+export function buildPlanFromVariant(v: AiVariantT, doc: PlanDocument, origin: Point = { x: 0, y: 0 }, levelId?: Id): BuiltPlan {
   const warnings: string[] = []
+  const levelLayers = levelId ? doc.layers.filter((l) => l.levelId === levelId) : doc.layers
   const layer = (role: Parameters<typeof findLayerByRole>[1]): Id =>
-    (findLayerByRole(doc, role) ?? doc.layers[doc.layers.length - 1]).id
+    (findLayerByRole(doc, role, levelId) ?? levelLayers[levelLayers.length - 1] ?? doc.layers[doc.layers.length - 1]).id
 
   // 1) Retângulos válidos (cm, no grid)
   const rects = v.rooms

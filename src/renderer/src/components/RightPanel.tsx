@@ -114,10 +114,15 @@ const commit = (recipe: Parameters<ReturnType<typeof useEditorStore.getState>['c
 function Properties(): React.JSX.Element {
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const objects = useEditorStore((s) => s.doc.objects)
+  const layers = useEditorStore((s) => s.doc.layers)
+  const levelId = useEditorStore((s) => s.activeLevelId)
   const { unit, precision } = useSettingsStore()
   const selected = objects.filter((o) => selectedIds.includes(o.id))
 
-  if (selected.length === 0) return <DocumentSummary objects={objects} unit={unit} precision={precision} />
+  if (selected.length === 0) {
+    const ids = new Set(layers.filter((l) => l.levelId === levelId).map((l) => l.id))
+    return <DocumentSummary objects={objects.filter((o) => ids.has(o.layerId))} unit={unit} precision={precision} />
+  }
 
   const deleteBtn = (
     <button type="button" className="btn btn--danger btn--block" onClick={() => useEditorStore.getState().deleteSelection()}>
@@ -405,7 +410,9 @@ function TextProps({ text }: { text: TextObject }): React.JSX.Element {
 
 /** Mover vários objetos de uma vez para outra camada. */
 function MultiLayerField({ ids }: { ids: string[] }): React.JSX.Element {
-  const layers = useEditorStore((s) => s.doc.layers)
+  const allLayers = useEditorStore((s) => s.doc.layers)
+  const levelId = useEditorStore((s) => s.activeLevelId)
+  const layers = allLayers.filter((l) => l.levelId === levelId)
   const objects = useEditorStore((s) => s.doc.objects)
   const layerIds = new Set(objects.filter((o) => ids.includes(o.id)).map((o) => o.layerId))
   const current = layerIds.size === 1 ? [...layerIds][0] : ''
@@ -656,8 +663,9 @@ function DimensionProps({ dim, unit, precision }: { dim: DimensionObject; unit: 
 }
 
 function LayerField({ obj }: { obj: PlanObject }): React.JSX.Element {
-  const layers = useEditorStore((s) => s.doc.layers)
-  const layer = layers.find((l) => l.id === obj.layerId)
+  const allLayers = useEditorStore((s) => s.doc.layers)
+  const layer = allLayers.find((l) => l.id === obj.layerId)
+  const layers = allLayers.filter((l) => l.levelId === layer?.levelId)
   return (
     <>
       <Field label="Camada">
