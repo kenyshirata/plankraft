@@ -19,6 +19,7 @@ import { distance, normalize, perp, polygonArea, polygonCentroid, sub } from '@r
 import { computeWallGeometry } from '@renderer/canvas/wallGeometry'
 import { clampOffset, OPENING_MARGIN } from '@renderer/lib/openings'
 import { instanceMatrix, transformShape } from '@renderer/lib/blockGeometry'
+import { resolveMaterial } from '@shared/materials'
 
 const M = 0.01 // cm → m
 export const DOOR_HEIGHT = 2.1
@@ -31,12 +32,15 @@ export interface BoxPiece {
   size: [number, number, number]
   kind: 'wall' | 'glass' | 'door'
   color: string
+  /** Textura do acabamento (id de material), se houver. */
+  texture?: string
 }
 
 export interface FloorPiece {
   id: Id
   geometry: THREE.ShapeGeometry
   color: string
+  texture?: string
   name: string
   area: number
   center: [number, number]
@@ -192,7 +196,9 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
     const nrm = perp(dir)
     const rotationY = -Math.atan2(dir.y, dir.x)
     const t = w.thickness * M
-    const color = tint.get(w.layerId) ?? WALL_COLOR
+    const mat = resolveMaterial(w.material)
+    const color = mat?.color ?? tint.get(w.layerId) ?? WALL_COLOR
+    const texture = mat?.pattern ? mat.id : undefined
     // Posições ao longo do eixo (cm, a partir de w.a), incluindo as extensões de canto.
     const s0 = -distance(g.a, w.a)
     const s1 = len + distance(g.b, w.b)
@@ -200,7 +206,14 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
     const piece = (sa: number, sb: number, y0: number, y1: number, kind: BoxPiece['kind'] = 'wall', depth = t, c = color): void => {
       if (sb - sa < 0.5 || y1 - y0 < 0.005) return
       const mid = at((sa + sb) / 2)
-      boxes.push({ position: [mid.x * M, (y0 + y1) / 2, mid.y * M], rotationY, size: [(sb - sa) * M, y1 - y0, depth], kind, color: c })
+      boxes.push({
+        position: [mid.x * M, (y0 + y1) / 2, mid.y * M],
+        rotationY,
+        size: [(sb - sa) * M, y1 - y0, depth],
+        kind,
+        color: c,
+        texture: kind === 'wall' ? texture : undefined
+      })
     }
     pts2d.push(g.a, g.b)
 
@@ -254,7 +267,8 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
       geometry.rotateX(-Math.PI / 2)
       const c = polygonCentroid(r.points)
       pts2d.push(...r.points)
-      return { id: r.id, geometry, color: r.color, name: r.name, area: polygonArea(r.points) / 10000, center: [c.x * M, c.y * M] as [number, number] }
+      const mat = resolveMaterial(r.material)
+      return { id: r.id, geometry, color: mat && !mat.pattern ? mat.color : r.color, texture: mat?.pattern ? mat.id : undefined, name: r.name, area: polygonArea(r.points) / 10000, center: [c.x * M, c.y * M] as [number, number] }
     })
 
   // ---- móveis

@@ -21,6 +21,9 @@ import { patchBlock, setBlockSize } from '@renderer/store/blockActions'
 import { resolveBlock } from '@renderer/store/libraryStore'
 import { BlockSvg } from './BlockSvg'
 import { AiSettings } from './AiSettings'
+import { MaterialSwatch } from './MaterialsPanel'
+import { resolveMaterial } from '@shared/materials'
+import { applyMaterial } from '@renderer/store/materialActions'
 import { openOnboarding } from './Onboarding'
 import { useAssetImage } from '@renderer/store/assetStore'
 import { cmPerPixel } from '@renderer/lib/imageGeometry'
@@ -245,6 +248,7 @@ function WallProps({ wall, unit, precision }: { wall: WallObject; unit: LengthUn
           onCommit={(v) => commit((d) => updateObject(d, wall.id, 'wall', (o) => ({ ...o, thickness: v })))}
         />
       </Field>
+      <MaterialField id={wall.material} label="Acabamento" />
       <Field label="Ângulo">
         <span className="readout">{formatAngle(-angleDeg(wall.a, wall.b))}</span>
       </Field>
@@ -344,10 +348,32 @@ function RoomProps({ room, unit, precision }: { room: RoomObject; unit: LengthUn
           ))}
         </div>
       </Field>
+      <MaterialField id={room.material} label="Piso" />
       <button type="button" className="btn btn--block" onClick={() => refreshRoomFromWalls(room.id)}>
         <RefreshCw size={14} /> Atualizar pelas paredes
       </button>
     </>
+  )
+}
+
+/** Mostra o material atual e leva à aba Materiais para trocá-lo. */
+function MaterialField({ id, label }: { id: string | undefined; label: string }): React.JSX.Element {
+  const def = resolveMaterial(id)
+  return (
+    <Field label={label}>
+      <div className="material-field">
+        {def ? <MaterialSwatch def={def} /> : <span className="mat-swatch mat-swatch--none" />}
+        <span className="material-field__name">{def?.name ?? 'Padrão'}</span>
+        <button type="button" className="btn btn--sm" onClick={() => useEditorStore.getState().setLeftTab('materials')}>
+          Escolher
+        </button>
+        {def && (
+          <button type="button" className="btn btn--sm" onClick={() => applyMaterial(null)} aria-label="Remover acabamento">
+            Remover
+          </button>
+        )}
+      </div>
+    </Field>
   )
 }
 

@@ -20,6 +20,8 @@ import { useResolvedTheme } from '@renderer/theme'
 import { formatNumber } from '@renderer/lib/format'
 import { toast } from '@renderer/store/toastStore'
 import { buildScene, type Scene3D } from './buildScene'
+import { resolveMaterial } from '@shared/materials'
+import { getTileCanvas } from '@renderer/lib/textures'
 
 type ViewPreset = 'iso' | 'top' | 'front' | 'fit'
 
@@ -229,20 +231,11 @@ function SceneContent({ scene, shadows, labels, dark }: { scene: Scene3D; shadow
       ))}
 
       {scene.floors.map((f) => (
-        <mesh key={f.id} geometry={f.geometry} position={[0, 0.003, 0]} receiveShadow>
-          <meshStandardMaterial color={f.color} roughness={0.9} side={THREE.DoubleSide} />
-        </mesh>
+        <FloorMesh key={f.id} f={f} />
       ))}
 
       {scene.boxes.map((b, i) => (
-        <mesh key={i} position={b.position} rotation-y={b.rotationY} castShadow={b.kind !== 'glass'} receiveShadow>
-          <boxGeometry args={b.size} />
-          {b.kind === 'glass' ? (
-            <meshStandardMaterial color={b.color} transparent opacity={0.35} roughness={0.1} metalness={0.1} depthWrite={false} />
-          ) : (
-            <meshStandardMaterial color={b.color} roughness={b.kind === 'door' ? 0.6 : 0.85} />
-          )}
-        </mesh>
+        <BoxMesh key={i} b={b} />
       ))}
 
       {scene.furniture.map((f, i) => (
@@ -285,6 +278,60 @@ function BackgroundPlane({ im }: { im: Scene3D['images'][number] }): React.JSX.E
     <mesh position={[im.center[0], 0.001, im.center[1]]} rotation={[-Math.PI / 2, 0, im.rotationY]} receiveShadow>
       <planeGeometry args={[im.width, im.height]} />
       <meshStandardMaterial map={texture} transparent opacity={im.opacity} roughness={1} />
+    </mesh>
+  )
+}
+
+// --------------------------------------------------------------- texturas dos materiais
+
+const baseTextures = new Map<string, THREE.CanvasTexture>()
+
+/** Textura do material com repetição em unidades de ladrilho (clone leve, mesma imagem). */
+function useMaterialTexture(id: string | undefined, repeatX: number, repeatY: number): THREE.Texture | null {
+  const tex = useMemo(() => {
+    if (!id) return null
+    const canvas = getTileCanvas(id)
+    if (!canvas) return null
+    let base = baseTextures.get(id)
+    if (!base) {
+      base = new THREE.CanvasTexture(canvas)
+      base.colorSpace = THREE.SRGBColorSpace
+      base.wrapS = base.wrapT = THREE.RepeatWrapping
+      base.anisotropy = 4
+      baseTextures.set(id, base)
+    }
+    const t = base.clone()
+    t.repeat.set(repeatX, repeatY)
+    t.needsUpdate = true
+    return t
+  }, [id, repeatX, repeatY])
+  useEffect(() => () => tex?.dispose(), [tex])
+  return tex
+}
+
+const tileMeters = (id: string | undefined): number => (resolveMaterial(id)?.tileCm ?? 100) / 100
+
+function FloorMesh({ f }: { f: Scene3D['floors'][number] }): React.JSX.Element {
+  const k = 1 / tileMeters(f.texture)
+  const map = useMaterialTexture(f.texture, k, k)
+  return (
+    <mesh geometry={f.geometry} position={[0, 0.003, 0]} receiveShadow>
+      <meshStandardMaterial color={map ? '#ffffff' : f.color} map={map} roughness={0.9} side={THREE.DoubleSide} />
+    </mesh>
+  )
+}
+
+function BoxMesh({ b }: { b: Scene3D['boxes'][number] }): React.JSX.Element {
+  const tm = tileMeters(b.texture)
+  const map = useMaterialTexture(b.texture, b.size[0] / tm, b.size[1] / tm)
+  return (
+    <mesh position={b.position} rotation-y={b.rotationY} castShadow={b.kind !== 'glass'} receiveShadow>
+      <boxGeometry args={b.size} />
+      {b.kind === 'glass' ? (
+        <meshStandardMaterial color={b.color} transparent opacity={0.35} roughness={0.1} metalness={0.1} depthWrite={false} />
+      ) : (
+        <meshStandardMaterial color={map ? '#ffffff' : b.color} map={map} roughness={b.kind === 'door' ? 0.6 : 0.85} />
+      )}
     </mesh>
   )
 }

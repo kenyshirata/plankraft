@@ -96,7 +96,7 @@ interface EditorState {
   selectedIds: Id[]
   doorHinge: 'start' | 'end'
   /** Aba do painel esquerdo. */
-  leftTab: 'layers' | 'blocks'
+  leftTab: 'layers' | 'blocks' | 'materials'
   /** Área central: só 2D, só 3D, ou os dois lado a lado. */
   viewMode: ViewMode
   /** Bloco escolhido na biblioteca para inserir com clique (ferramenta Blocos). */
@@ -137,7 +137,7 @@ interface EditorState {
   deleteSelection(): void
   setEditing(target: EditTarget | null): void
   setDoorHinge(h: 'start' | 'end'): void
-  setLeftTab(tab: 'layers' | 'blocks'): void
+  setLeftTab(tab: 'layers' | 'blocks' | 'materials'): void
   setViewMode(mode: ViewMode): void
   /** Entra no modo de inserção do bloco (ou sai, com null). */
   setPlacing(blockId: string | null): void

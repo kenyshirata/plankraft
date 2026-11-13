@@ -50,6 +50,8 @@ export interface WallObject extends BaseObject {
   b: Point
   /** Espessura em cm. */
   thickness: number
+  /** Acabamento (id de shared/materials.ts); ausente = cor padrão. */
+  material?: string
 }
 
 /**
@@ -85,6 +87,8 @@ export interface RoomObject extends BaseObject {
   points: Point[]
   /** Cor de preenchimento (hex). */
   color: string
+  /** Piso/acabamento (id de shared/materials.ts); ausente = só a cor do cômodo. */
+  material?: string
 }
 
 export interface TextObject extends BaseObject {

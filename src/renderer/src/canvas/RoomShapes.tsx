@@ -3,6 +3,8 @@ import type { Id, LengthUnit, RoomObject } from '@shared/model'
 import { polygonArea, polygonCentroid } from '@renderer/lib/geometry'
 import { formatArea } from '@renderer/lib/format'
 import type { CanvasPalette } from '@renderer/theme'
+import { resolveMaterial } from '@shared/materials'
+import { getTileCanvas, TILE_PX } from '@renderer/lib/textures'
 
 interface RoomShapesProps {
   rooms: RoomObject[]
@@ -30,6 +32,11 @@ export function RoomShapes({ rooms, palette, scale, selected, hoveredId, unit, p
       {part !== 'labels' && rooms.map((r) => {
         const isSel = selected.has(r.id)
         const isHover = !isSel && hoveredId === r.id
+        const mat = resolveMaterial(r.material)
+        const tile = mat ? getTileCanvas(mat.id) : null
+        const k = mat?.tileCm ? mat.tileCm / TILE_PX : 1
+        // Com acabamento o piso aparece quase opaco; sem ele, fica como tinta translúcida.
+        const baseOpacity = mat ? 0.9 : 0.24
         return (
           <Line
             key={r.id}
@@ -37,8 +44,11 @@ export function RoomShapes({ rooms, palette, scale, selected, hoveredId, unit, p
             name="plan-object"
             points={r.points.flatMap((p) => [p.x, p.y])}
             closed
-            fill={r.color}
-            opacity={isSel ? 0.42 : isHover ? 0.34 : 0.24}
+            fill={tile ? undefined : (mat?.color ?? r.color)}
+            fillPatternImage={(tile ?? undefined) as unknown as HTMLImageElement | undefined}
+            fillPatternScale={tile ? { x: k, y: k } : undefined}
+            fillPatternRepeat="repeat"
+            opacity={isSel ? Math.min(1, baseOpacity + 0.12) : isHover ? Math.min(1, baseOpacity + 0.06) : baseOpacity}
             stroke={isSel ? palette.accent : isHover ? palette.hover : undefined}
             strokeWidth={2 * hair}
             dash={isSel ? undefined : [6 * hair, 4 * hair]}

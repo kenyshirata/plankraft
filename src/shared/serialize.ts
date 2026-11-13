@@ -53,7 +53,9 @@ function normalizeObject(v: unknown, layerIds: Set<string>, fallbackLayer: strin
     case 'wall': {
       const a = point(v.a)
       const b = point(v.b)
-      return a && b ? { id, layerId, type: 'wall', a, b, thickness: Math.max(1, num(v.thickness, 15)) } : null
+      return a && b
+        ? { id, layerId, type: 'wall', a, b, thickness: Math.max(1, num(v.thickness, 15)), ...(typeof v.material === 'string' ? { material: v.material } : {}) }
+        : null
     }
     case 'door':
     case 'window': {
@@ -66,7 +68,15 @@ function normalizeObject(v: unknown, layerIds: Set<string>, fallbackLayer: strin
     case 'room': {
       const pts = Array.isArray(v.points) ? v.points.map(point).filter((p): p is Point => p !== null) : []
       return pts.length >= 3
-        ? { id, layerId, type: 'room', name: str(v.name, 'Cômodo'), points: pts, color: str(v.color, '#7aa2ff') }
+        ? {
+            id,
+            layerId,
+            type: 'room',
+            name: str(v.name, 'Cômodo'),
+            points: pts,
+            color: str(v.color, '#7aa2ff'),
+            ...(typeof v.material === 'string' ? { material: v.material } : {})
+          }
         : null
     }
     case 'text': {

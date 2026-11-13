@@ -1,6 +1,8 @@
 import { Line } from 'react-konva'
 import type { Id, WallObject } from '@shared/model'
 import type { CanvasPalette } from '@renderer/theme'
+import { resolveMaterial } from '@shared/materials'
+import { getTileCanvas, TILE_PX } from '@renderer/lib/textures'
 import { extendedPoints, type WallRenderGeometry } from './wallGeometry'
 
 interface WallShapesProps {
@@ -48,13 +50,19 @@ export function WallShapes({ walls, geometry, palette, scale, selected, hoveredI
       {walls.map((w) => {
         const g = geometry.get(w.id)
         if (!g) return null
+        const mat = resolveMaterial(w.material)
+        const tile = mat ? getTileCanvas(mat.id) : null
+        const k = mat?.tileCm ? mat.tileCm / TILE_PX : 1
         return (
           <Line
             key={`fill-${w.id}`}
             id={w.id}
             name="plan-object"
             points={[g.a.x, g.a.y, g.b.x, g.b.y]}
-            stroke={tint ?? palette.wallFill}
+            stroke={tile ? undefined : (mat?.color ?? tint ?? palette.wallFill)}
+            strokePatternImage={(tile ?? undefined) as unknown as HTMLImageElement | undefined}
+            strokePatternScale={tile ? { x: k, y: k } : undefined}
+            strokePatternRepeat="repeat"
             strokeWidth={w.thickness}
             hitStrokeWidth={Math.max(w.thickness, 12 * hair)}
             lineCap="butt"

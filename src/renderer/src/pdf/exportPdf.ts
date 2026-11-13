@@ -27,6 +27,7 @@ import type {
 } from '@shared/model'
 import { add, angleDeg, boundsOf, mul, normalize, perp, polygonArea, polygonCentroid, readableAngle, sub, type Rect } from '@renderer/lib/geometry'
 import { formatArea, formatLength } from '@renderer/lib/format'
+import { resolveMaterial } from '@shared/materials'
 import { computeWallGeometry, extendedPoints } from '@renderer/canvas/wallGeometry'
 import { openingGeometry } from '@renderer/lib/openings'
 import { planarFaces } from '@renderer/lib/rooms'
@@ -316,7 +317,7 @@ export function buildPdf(doc: PlanDocument, opts: PdfOptions, ctx: PdfContext): 
         const n = mul(perp(g.dir), o.thickness / 2)
         const a = { x: x1, y: y1 }
         const b = { x: x2, y: y2 }
-        fillPath([add(a, n), add(b, n), sub(b, n), sub(a, n)], layer.color ?? COLORS.wall)
+        fillPath([add(a, n), add(b, n), sub(b, n), sub(a, n)], resolveMaterial(o.material)?.color ?? layer.color ?? COLORS.wall)
       }
       // Aberturas
       for (const o of objs) if (o.type === 'door' || o.type === 'window') drawOpening(o, layer.color)
@@ -378,7 +379,8 @@ export function buildPdf(doc: PlanDocument, opts: PdfOptions, ctx: PdfContext): 
   }
 
   function drawRoomFill(o: RoomObject): void {
-    withOpacity(0.2, () => fillPath(o.points, o.color))
+    const mat = resolveMaterial(o.material)
+    withOpacity(mat ? 0.6 : 0.2, () => fillPath(o.points, mat?.color ?? o.color))
   }
 
   function drawRoomLabel(o: RoomObject): void {

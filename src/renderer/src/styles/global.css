@@ -461,13 +461,14 @@ kbd {
 .tabs__tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 10px 9px;
+  gap: 5px;
+  padding: 7px 8px 9px;
   border: none;
   background: transparent;
   color: var(--text-3);
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: 12px;
+  white-space: nowrap;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
@@ -1931,4 +1932,79 @@ kbd {
 .viewer3d__label span {
   color: #5b6170;
   font-size: 10px;
+}
+
+/* ---------------------------------------------------------------- materiais */
+.materials {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.materials__actions {
+  display: flex;
+  gap: 6px;
+}
+.materials__custom {
+  position: relative;
+  cursor: pointer;
+}
+.materials__custom input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.materials__group h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.materials__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+  gap: 6px;
+}
+.mat-swatch {
+  display: block;
+  aspect-ratio: 1;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+  padding: 0;
+}
+.mat-swatch:hover {
+  transform: scale(1.06);
+}
+.mat-swatch.is-active {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.mat-swatch--none {
+  background:
+    linear-gradient(135deg, transparent 45%, var(--danger) 45%, var(--danger) 55%, transparent 55%),
+    var(--panel);
+  cursor: default;
+}
+.material-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.material-field .mat-swatch {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+.material-field__name {
+  flex: 1;
+  min-width: 60px;
+  font-size: 12px;
 }
