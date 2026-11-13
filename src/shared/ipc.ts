@@ -21,6 +21,7 @@ export const IPC = {
   importModel: 'model:import',
   loadAssets: 'assets:load',
   savePdf: 'pdf:save',
+  saveImage: 'image:save',
   aiStatus: 'ai:status',
   aiSetProvider: 'ai:set-provider',
   aiSetKey: 'ai:set-key',
@@ -137,6 +138,12 @@ export type AiRecognizeResult =
   | { ok: true; recognition: AiRecognitionT; provider: AiProvider; model: string }
   | { ok: false; error: string; needsKey?: boolean }
 
+export interface SaveImageRequest {
+  suggestedName: string
+  /** Bytes do PNG. */
+  data: Uint8Array
+}
+
 export interface SavePdfRequest {
   suggestedName: string
   /** Bytes do PDF. */
@@ -174,6 +181,8 @@ export interface PlanKraftApi {
   loadAssets(projectPath: string, keys: string[]): Promise<AssetData[]>
   /** Diálogo "Salvar como" + gravação do PDF. null = cancelado. */
   savePdf(req: SavePdfRequest): Promise<{ filePath: string } | null>
+  /** Mostra "Salvar como" e grava um PNG (imagem 3D / panorama). null = cancelado. */
+  saveImage(req: SaveImageRequest): Promise<{ filePath: string } | null>
   /** IA: a chave fica só no main (criptografada); o renderer vê apenas o status. */
   aiStatus(): Promise<AiStatus>
   aiSetProvider(provider: AiProvider): Promise<AiStatus>

@@ -56,6 +56,8 @@ export interface Settings {
   /** Corta as paredes a 1,20 m para ver o interior. */
   cutaway3d: boolean
   labels3d: boolean
+  /** Hora do dia (0–24) que define o sol e o céu da maquete. */
+  sunHour: number
   shadows3d: boolean
   /** Imagem de fundo como textura no chão. */
   background3d: boolean
@@ -96,6 +98,7 @@ export const DEFAULT_SETTINGS: Settings = {
   wallHeight3d: 2.7,
   cutaway3d: false,
   labels3d: true,
+  sunHour: 14,
   shadows3d: true,
   background3d: false
 }

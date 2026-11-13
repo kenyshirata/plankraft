@@ -11,7 +11,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { Box, Eye, Footprints, ImageDown, Layers2, Maximize, Scissors, Sun, Tag, X } from 'lucide-react'
+import { Box, Clock, Eye, Footprints, Globe, ImageDown, Layers2, Maximize, Scissors, Sun, Tag, X } from 'lucide-react'
 import { useEditorStore } from '@renderer/store/editorStore'
 import { useSettingsStore } from '@renderer/store/settingsStore'
 import { useAssetStore } from '@renderer/store/assetStore'
@@ -22,10 +22,18 @@ import { toast } from '@renderer/store/toastStore'
 import { buildScene, type Scene3D } from './buildScene'
 import { blockers, EYE_HEIGHT, stepWalker, type Walker } from './walk'
 import { loadModel, type LoadedModel } from './models'
+import { formatHour, sunState } from './sun'
+import { renderImage, renderPanorama } from './capture'
 import { resolveMaterial } from '@shared/materials'
 import { getTileCanvas } from '@renderer/lib/textures'
 
 type ViewPreset = 'iso' | 'top' | 'front' | 'fit'
+
+/** Ponte para as capturas em alta resolução (preenchida de dentro do Canvas). */
+interface CaptureApi {
+  image(longSide: number): Promise<Blob>
+  panorama(x: number, y: number, z: number, width: number): Promise<Blob>
+}
 
 interface WalkStart {
   x: number
@@ -47,6 +55,11 @@ export default function Viewer3D(): React.JSX.Element {
   const theme = useResolvedTheme()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [walk, setWalk] = useState<WalkStart | null>(null)
+  const [exportSize, setExportSize] = useState<'screen' | '2k' | '4k'>('2k')
+  const [busy, setBusy] = useState(false)
+  const capture = useRef<CaptureApi | null>(null)
+  /** Posição atual do passeio (atualizada a cada quadro), usada pelo panorama. */
+  const walkPos = useRef<Walker | null>(null)
 
   const scene = useMemo(
     () =>
@@ -74,35 +87,86 @@ export default function Viewer3D(): React.JSX.Element {
     [scene]
   )
 
-  const exportPng = (): void => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const a = document.createElement('a')
-    a.href = canvas.toDataURL('image/png')
-    a.download = `${doc.name || 'planta'} - 3D.png`
-    a.click()
-    toast.success('Imagem 3D exportada.')
+  /** Grava o PNG via diálogo nativo (no navegador, baixa direto). */
+  const savePng = async (blob: Blob, name: string): Promise<void> => {
+    if (window.api) {
+      const res = await window.api.saveImage({ suggestedName: name, data: new Uint8Array(await blob.arrayBuffer()) })
+      if (res) toast.success(`Imagem salva: ${res.filePath}`)
+      return
+    }
+    const url = URL.createObjectURL(blob)
+    const el = document.createElement('a')
+    el.href = url
+    el.download = `${name}.png`
+    el.click()
+    URL.revokeObjectURL(url)
+    toast.success('Imagem exportada.')
   }
 
-  /** Começa o passeio no cômodo selecionado (ou no maior do andar ativo). */
-  const startWalk = (): void => {
+  const exportPng = async (): Promise<void> => {
+    const cap = capture.current
+    if (!cap || busy) return
+    setBusy(true)
+    try {
+      const canvas = canvasRef.current
+      const side = exportSize === '4k' ? 3840 : exportSize === '2k' ? 2560 : Math.max(canvas?.width ?? 1280, canvas?.height ?? 720)
+      const blob = await cap.image(side)
+      await savePng(blob, `${doc.name || 'planta'} - 3D ${exportSize === 'screen' ? '' : exportSize.toUpperCase()}`.trim())
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível exportar a imagem.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Ponto de partida: cômodo selecionado ou o maior do andar ativo. */
+  const pickStart = (): WalkStart | null => {
     const ed = useEditorStore.getState()
     const level = ed.doc.levels.find((l) => l.id === ed.activeLevelId)
     const elev = (level?.elevation ?? 0) / 100
     const onLevel = scene.floors.filter((f) => !f.zone && Math.abs(f.elevation - elev) < 1e-3)
     const pick = onLevel.find((f) => ed.selectedIds.includes(f.id)) ?? [...onLevel].sort((a, b) => b.area - a.area)[0]
-    if (!pick) {
-      toast.info('Desenhe um cômodo neste andar (ou gere uma planta) para começar o passeio.')
-      return
-    }
+    if (!pick) return null
     const [cx, cz] = scene.center
     const dx = cx - pick.center[0]
     const dz = cz - pick.center[1]
     const yaw = Math.hypot(dx, dz) > 0.5 ? Math.atan2(-dx, -dz) : 0
-    setWalk({ x: pick.center[0], z: pick.center[1], ground: pick.elevation, yaw })
+    return { x: pick.center[0], z: pick.center[1], ground: pick.elevation, yaw }
   }
 
-  const bg = theme === 'dark' ? '#1b1d22' : '#eef1f5'
+  /** Panorama 360° a partir do ponto do passeio (se estiver andando) ou do cômodo escolhido. */
+  const exportPanorama = async (): Promise<void> => {
+    const cap = capture.current
+    if (!cap || busy) return
+    const here = walk && walkPos.current ? { x: walkPos.current.x, z: walkPos.current.z, ground: walkPos.current.ground } : pickStart()
+    if (!here) {
+      toast.info('Desenhe um cômodo neste andar (ou gere uma planta) para criar o panorama.')
+      return
+    }
+    setBusy(true)
+    try {
+      const blob = await cap.panorama(here.x, here.ground + EYE_HEIGHT, here.z, exportSize === '4k' ? 8192 : 4096)
+      await savePng(blob, `${doc.name || 'planta'} - panorama 360`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível gerar o panorama.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Começa o passeio no cômodo selecionado (ou no maior do andar ativo). */
+  const startWalk = (): void => {
+    const start = pickStart()
+    if (!start) {
+      toast.info('Desenhe um cômodo neste andar (ou gere uma planta) para começar o passeio.')
+      return
+    }
+    setWalk(start)
+  }
+
+  const sun = useMemo(() => sunState(s.sunHour), [s.sunHour])
+  // Céu: mistura a cor do tema com a do horário (a noite escurece, o fim de tarde esquenta).
+  const bg = useMemo(() => new THREE.Color(theme === 'dark' ? '#1b1d22' : '#eef1f5').lerp(new THREE.Color(sun.sky), 0.55).getStyle(), [theme, sun.sky])
 
   return (
     <div className="viewer3d">
@@ -114,7 +178,8 @@ export default function Viewer3D(): React.JSX.Element {
         camera={{ fov: 45, near: 0.1, far: 500, position: [10, 10, 10] }}
       >
         <color attach="background" args={[bg]} />
-        <SceneContent scene={scene} shadows={s.shadows3d} labels={s.labels3d && !walk && !scene.roof} dark={theme === 'dark'} walk={walk} onExit={() => setWalk(null)} />
+        <CaptureBridge api={capture} />
+        <SceneContent scene={scene} shadows={s.shadows3d} labels={s.labels3d && !walk && !scene.roof} dark={theme === 'dark'} sun={sun} walk={walk} walkPos={walkPos} onExit={() => setWalk(null)} />
       </Canvas>
 
       {scene.empty && <div className="viewer3d__empty">Desenhe paredes no 2D (ou gere uma planta) para ver a maquete 3D.</div>}
@@ -207,8 +272,30 @@ export default function Viewer3D(): React.JSX.Element {
           <span>{formatNumber(s.wallHeight3d, 1)} m</span>
         </label>
         <span className="toolbar__sep" />
-        <button type="button" className="icon-btn icon-btn--sm" data-tooltip="Exportar PNG" data-tooltip-pos="left" onClick={exportPng}>
+        <label className="viewer3d__hour" data-tooltip="Hora do dia (sol e céu)">
+          <Clock size={14} />
+          <input
+            type="range"
+            min={4}
+            max={21}
+            step={0.25}
+            value={s.sunHour}
+            aria-label="Hora do dia"
+            onChange={(e) => s.set('sunHour', Number(e.target.value))}
+          />
+          <span>{formatHour(s.sunHour)}</span>
+        </label>
+        <span className="toolbar__sep" />
+        <select className="select viewer3d__size" value={exportSize} aria-label="Tamanho da imagem" onChange={(e) => setExportSize(e.target.value as typeof exportSize)}>
+          <option value="screen">Tela</option>
+          <option value="2k">2K</option>
+          <option value="4k">4K</option>
+        </select>
+        <button type="button" className="icon-btn icon-btn--sm" disabled={busy} data-tooltip="Exportar PNG" data-tooltip-pos="left" onClick={() => void exportPng()}>
           <ImageDown size={16} />
+        </button>
+        <button type="button" className="icon-btn icon-btn--sm" disabled={busy} data-tooltip="Panorama 360° (PNG)" data-tooltip-pos="left" onClick={() => void exportPanorama()}>
+          <Globe size={16} />
         </button>
       </div>
       {walk ? (
@@ -239,14 +326,18 @@ function SceneContent({
   shadows,
   labels,
   dark,
+  sun,
   walk,
+  walkPos,
   onExit
 }: {
   scene: Scene3D
   shadows: boolean
   labels: boolean
   dark: boolean
+  sun: ReturnType<typeof sunState>
   walk: WalkStart | null
+  walkPos: React.MutableRefObject<Walker | null>
   onExit: () => void
 }): React.JSX.Element {
   const controls = useRef<OrbitControlsImpl>(null)
@@ -284,10 +375,11 @@ function SceneContent({
   const shadowSize = Math.max(8, r * 1.6)
   return (
     <>
-      <hemisphereLight args={[dark ? '#c9d4ff' : '#ffffff', dark ? '#2a2620' : '#b9ad99', dark ? 0.55 : 0.75]} />
+      <hemisphereLight args={[sun.hemiSky, sun.hemiGround, sun.hemi]} />
       <directionalLight
-        position={[cx + r * 1.2, r * 2.2, cz + r * 0.8]}
-        intensity={dark ? 1.4 : 1.8}
+        position={[cx + sun.dir[0] * (r * 3 + 12), sun.dir[1] * (r * 3 + 12), cz + sun.dir[2] * (r * 3 + 12)]}
+        color={sun.color}
+        intensity={sun.intensity}
         castShadow={shadows}
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0004}
@@ -295,7 +387,7 @@ function SceneContent({
         shadow-camera-right={shadowSize}
         shadow-camera-top={shadowSize}
         shadow-camera-bottom={-shadowSize}
-        shadow-camera-far={r * 8}
+        shadow-camera-far={r * 10 + 40}
       >
         <object3D attach="target" position={[cx, 0, cz]} />
       </directionalLight>
@@ -349,7 +441,7 @@ function SceneContent({
       ))}
 
       {walk ? (
-        <WalkRig scene={scene} start={walk} onExit={onExit} onLeave={() => apply('iso')} />
+        <WalkRig scene={scene} start={walk} posRef={walkPos} onExit={onExit} onLeave={() => apply('iso')} />
       ) : (
         <OrbitControls
           ref={controls}
@@ -455,7 +547,19 @@ const WALK_SPEED = 1.5
 const RUN_FACTOR = 2.2
 
 /** Câmera na altura dos olhos: WASD/setas, arrastar para olhar, colisão com paredes e escadas. */
-function WalkRig({ scene, start, onExit, onLeave }: { scene: Scene3D; start: WalkStart; onExit: () => void; onLeave: () => void }): null {
+function WalkRig({
+  scene,
+  start,
+  posRef,
+  onExit,
+  onLeave
+}: {
+  scene: Scene3D
+  start: WalkStart
+  posRef: React.MutableRefObject<Walker | null>
+  onExit: () => void
+  onLeave: () => void
+}): null {
   const { camera, gl } = useThree()
   const walls = useMemo(() => blockers(scene), [scene])
   const sceneRef = useRef(scene)
@@ -563,6 +667,7 @@ function WalkRig({ scene, start, onExit, onLeave }: { scene: Scene3D; start: Wal
     eye.current += (me.current.ground + EYE_HEIGHT - eye.current) * Math.min(1, d * 12)
     camera.position.set(me.current.x, eye.current, me.current.z)
     camera.rotation.set(l.pitch, l.yaw, 0)
+    posRef.current = me.current
     if (import.meta.env.DEV) (window as unknown as { __walk: unknown }).__walk = { ...me.current, yaw: l.yaw, eye: eye.current }
   })
   return null
@@ -605,4 +710,25 @@ function ModelMesh({ m }: { m: Scene3D['models'][number] }): React.JSX.Element |
       <primitive object={obj} />
     </group>
   )
+}
+
+/** Entrega ao Viewer3D as funções de captura em alta resolução (usam o renderer do Canvas). */
+function CaptureBridge({ api }: { api: React.MutableRefObject<CaptureApi | null> }): null {
+  const get = useThree((st) => st.get)
+  useEffect(() => {
+    api.current = {
+      image: (side) => {
+        const { gl, scene, camera } = get()
+        return renderImage(gl, scene, camera as THREE.PerspectiveCamera, side)
+      },
+      panorama: (x, y, z, width) => {
+        const { gl, scene } = get()
+        return renderPanorama(gl, scene, new THREE.Vector3(x, y, z), width)
+      }
+    }
+    return () => {
+      api.current = null
+    }
+  }, [api, get])
+  return null
 }
