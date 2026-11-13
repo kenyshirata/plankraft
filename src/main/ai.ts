@@ -16,8 +16,9 @@ import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
 import OpenAI from 'openai'
 import * as z from 'zod/v4'
 import { AI_SYSTEM_PROMPT, AiPlanResponse, type AiPlanResponseT } from '../shared/aiPlan'
+import { AiRecognition, RECOGNIZE_SYSTEM_PROMPT, type AiRecognitionT } from '../shared/aiRecognize'
 import { generateOfflinePlan } from '../shared/offlinePlanner'
-import { IPC, type AiGenerateResult, type AiProvider, type AiStatus, type AiTestResult } from '../shared/ipc'
+import { IPC, type AiGenerateResult, type AiProvider, type AiRecognizeResult, type AiStatus, type AiTestResult, type RecognizeImage } from '../shared/ipc'
 import { assertTrustedSender } from './security'
 
 /** Modelos usados por provedor. */
@@ -140,6 +141,10 @@ async function generateWithClaude(key: string, prompt: string, signal: AbortSign
 
 /** JSON Schema estrito para a OpenAI (todos os campos obrigatórios, sem propriedades extras). */
 function openAiSchema(): Record<string, unknown> {
+  return strictSchema(z.toJSONSchema(AiPlanResponse))
+}
+
+function strictSchema(schema: unknown): Record<string, unknown> {
   const strictify = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(strictify)
     if (!node || typeof node !== 'object') return node
@@ -151,7 +156,7 @@ function openAiSchema(): Record<string, unknown> {
     delete obj.$schema
     return obj
   }
-  return strictify(z.toJSONSchema(AiPlanResponse)) as Record<string, unknown>
+  return strictify(schema) as Record<string, unknown>
 }
 
 async function generateWithOpenAI(key: string, prompt: string, signal: AbortSignal): Promise<AiPlanResponseT> {
@@ -171,6 +176,85 @@ async function generateWithOpenAI(key: string, prompt: string, signal: AbortSign
   if (choice?.message.refusal) throw new Error('O pedido foi recusado pelo modelo. Reformule a descrição da planta.')
   if (choice?.finish_reason === 'length') throw new Error('A resposta ficou longa demais. Peça menos cômodos ou menos detalhes.')
   return AiPlanResponse.parse(JSON.parse(choice?.message.content ?? '{}'))
+}
+
+// ------------------------------------------------------- reconhecimento de imagem
+
+const MAX_IMAGE_B64 = 7_000_000 // ~5 MB de imagem
+
+function validImage(v: unknown): v is RecognizeImage {
+  if (!v || typeof v !== 'object') return false
+  const i = v as Record<string, unknown>
+  return (
+    (i.mediaType === 'image/jpeg' || i.mediaType === 'image/png') &&
+    typeof i.data === 'string' &&
+    i.data.length > 100 &&
+    i.data.length <= MAX_IMAGE_B64 &&
+    /^[A-Za-z0-9+/]+={0,2}$/.test(i.data) &&
+    Number.isInteger(i.width) &&
+    Number.isInteger(i.height) &&
+    (i.width as number) > 0 &&
+    (i.width as number) <= 4096 &&
+    (i.height as number) > 0 &&
+    (i.height as number) <= 4096
+  )
+}
+
+const recognizeText = (img: RecognizeImage): string =>
+  `Esta é uma planta baixa. A imagem tem ${img.width} px de largura e ${img.height} px de altura. Devolva os cômodos, portas, janelas e a escala em pixels dessa imagem.`
+
+async function recognizeWithClaude(key: string, img: RecognizeImage, signal: AbortSignal): Promise<AiRecognitionT> {
+  const client = new Anthropic({ apiKey: key })
+  const response = await client.beta.messages.parse(
+    {
+      model: AI_MODELS.anthropic,
+      max_tokens: 16000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'medium', format: betaZodOutputFormat(AiRecognition) },
+      system: [{ type: 'text', text: RECOGNIZE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } },
+            { type: 'text', text: recognizeText(img) }
+          ]
+        }
+      ]
+    },
+    { signal }
+  )
+  if (response.stop_reason === 'refusal') throw new Error('A imagem foi recusada pelo modelo.')
+  if (response.stop_reason === 'max_tokens') throw new Error('A resposta ficou longa demais. Tente uma imagem mais simples.')
+  if (!response.parsed_output) throw new Error('A IA não retornou uma leitura válida. Tente novamente.')
+  return response.parsed_output
+}
+
+async function recognizeWithOpenAI(key: string, img: RecognizeImage, signal: AbortSignal): Promise<AiRecognitionT> {
+  const client = new OpenAI({ apiKey: key })
+  const schema = strictSchema(z.toJSONSchema(AiRecognition))
+  const completion = await client.chat.completions.create(
+    {
+      model: AI_MODELS.openai,
+      response_format: { type: 'json_schema', json_schema: { name: 'reconhecimento', strict: true, schema } },
+      messages: [
+        { role: 'system', content: RECOGNIZE_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: `data:${img.mediaType};base64,${img.data}`, detail: 'high' } },
+            { type: 'text', text: recognizeText(img) }
+          ]
+        }
+      ]
+    },
+    { signal }
+  )
+  const choice = completion.choices[0]
+  if (choice?.message.refusal) throw new Error('A imagem foi recusada pelo modelo.')
+  if (choice?.finish_reason === 'length') throw new Error('A resposta ficou longa demais. Tente uma imagem mais simples.')
+  return AiRecognition.parse(JSON.parse(choice?.message.content ?? '{}'))
 }
 
 // ------------------------------------------------------------------------ IPC
@@ -254,6 +338,35 @@ export function registerAiIpc(): void {
           : await generateWithOpenAI(key, prompt.trim(), controller.signal)
       if (!plan.variants.length) return { ok: false, error: 'A IA não retornou nenhuma variação. Tente novamente.' }
       return { ok: true, plan, provider, model: AI_MODELS[provider] }
+    } catch (err) {
+      return { ok: false, error: friendlyError(err, provider) }
+    } finally {
+      if (inFlight === controller) inFlight = null
+    }
+  })
+
+  ipcMain.handle(IPC.aiRecognize, async (event, image: unknown): Promise<AiRecognizeResult> => {
+    assertTrustedSender(event)
+    if (!validImage(image)) return { ok: false, error: 'Imagem inválida ou grande demais para o reconhecimento.' }
+    const { provider } = await readSettings()
+    if (provider === 'offline') {
+      return {
+        ok: false,
+        error: 'Reconhecer planta precisa de IA com visão. Escolha Claude ou OpenAI em Configurações → Inteligência artificial.',
+        needsKey: true
+      }
+    }
+    const key = await getKey(provider)
+    if (!key) return { ok: false, error: 'Configure sua chave de API em Configurações → Inteligência artificial.', needsKey: true }
+    inFlight?.abort()
+    const controller = new AbortController()
+    inFlight = controller
+    try {
+      const recognition =
+        provider === 'anthropic'
+          ? await recognizeWithClaude(key, image, controller.signal)
+          : await recognizeWithOpenAI(key, image, controller.signal)
+      return { ok: true, recognition, provider, model: AI_MODELS[provider] }
     } catch (err) {
       return { ok: false, error: friendlyError(err, provider) }
     } finally {

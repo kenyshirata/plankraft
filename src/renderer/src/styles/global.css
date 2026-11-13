@@ -2113,3 +2113,46 @@ kbd {
   font: inherit;
   font-size: 11px;
 }
+
+/* ---------------------------------------------------------------- reconhecer planta */
+.rec-review {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.rec-review__side {
+  flex: 1 1 200px;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rec-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+}
+.rec-preview canvas {
+  max-width: 100%;
+  height: auto !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.rec-preview__legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.rec-preview__legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.check.is-disabled {
+  opacity: 0.55;
+}

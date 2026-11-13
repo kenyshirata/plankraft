@@ -37,7 +37,7 @@ export const AI_FURNITURE: Record<string, string> = {
 
 const FURNITURE_IDS = Object.keys(AI_FURNITURE) as [string, ...string[]]
 
-const ROOM_TYPES = [
+export const ROOM_TYPES = [
   'sala',
   'cozinha',
   'sala_cozinha',

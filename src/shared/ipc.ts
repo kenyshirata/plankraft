@@ -6,6 +6,7 @@
 
 import type { BlockLibraryFile } from './blocks'
 import type { AiPlanResponseT } from './aiPlan'
+import type { AiRecognitionT } from './aiRecognize'
 
 export const IPC = {
   getAppInfo: 'app:get-info',
@@ -24,6 +25,7 @@ export const IPC = {
   aiSetKey: 'ai:set-key',
   aiTest: 'ai:test',
   aiGenerate: 'ai:generate',
+  aiRecognize: 'ai:recognize',
   aiCancel: 'ai:cancel'
 } as const
 
@@ -113,6 +115,19 @@ export type AiGenerateResult =
   | { ok: true; plan: AiPlanResponseT; provider: AiProvider; model: string }
   | { ok: false; error: string; needsKey?: boolean }
 
+/** Imagem da planta enviada para reconhecimento (já reduzida pelo renderer). */
+export interface RecognizeImage {
+  mediaType: 'image/jpeg' | 'image/png'
+  /** Base64 sem o prefixo data:. */
+  data: string
+  width: number
+  height: number
+}
+
+export type AiRecognizeResult =
+  | { ok: true; recognition: AiRecognitionT; provider: AiProvider; model: string }
+  | { ok: false; error: string; needsKey?: boolean }
+
 export interface SavePdfRequest {
   suggestedName: string
   /** Bytes do PDF. */
@@ -154,5 +169,6 @@ export interface PlanKraftApi {
   aiSetKey(provider: AiProvider, key: string | null): Promise<AiStatus>
   aiTest(provider: AiProvider): Promise<AiTestResult>
   aiGenerate(prompt: string): Promise<AiGenerateResult>
+  aiRecognize(image: RecognizeImage): Promise<AiRecognizeResult>
   aiCancel(): Promise<boolean>
 }

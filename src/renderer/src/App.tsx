@@ -9,6 +9,7 @@ import { BlockDialogHost } from './components/BlockDialog'
 import { CalibrateDialogHost } from './components/CalibrateDialog'
 import { ExportPdfDialogHost } from './components/ExportPdfDialog'
 import { AiDialogHost } from './components/AiDialog'
+import { RecognizeDialogHost } from './components/RecognizeDialog'
 import { OnboardingHost } from './components/Onboarding'
 import { useLibraryStore } from './store/libraryStore'
 import { Toolbar } from './components/Toolbar'
@@ -74,6 +75,7 @@ export function App(): React.JSX.Element {
       <CalibrateDialogHost />
       <ExportPdfDialogHost />
       <AiDialogHost />
+      <RecognizeDialogHost />
       <OnboardingHost />
     </div>
   )

@@ -29,6 +29,7 @@ const api: PlanKraftApi = {
   aiSetKey: (provider, key) => ipcRenderer.invoke(IPC.aiSetKey, provider, key),
   aiTest: (provider) => ipcRenderer.invoke(IPC.aiTest, provider),
   aiGenerate: (prompt) => ipcRenderer.invoke(IPC.aiGenerate, prompt),
+  aiRecognize: (image) => ipcRenderer.invoke(IPC.aiRecognize, image),
   aiCancel: () => ipcRenderer.invoke(IPC.aiCancel)
 }
 

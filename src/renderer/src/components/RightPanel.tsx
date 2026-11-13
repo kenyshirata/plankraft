@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Repeat,
   RotateCw,
+  ScanSearch,
   Settings2,
   SlidersHorizontal,
   Trash2
@@ -21,6 +22,7 @@ import { patchBlock, setBlockSize } from '@renderer/store/blockActions'
 import { resolveBlock } from '@renderer/store/libraryStore'
 import { BlockSvg } from './BlockSvg'
 import { AiSettings } from './AiSettings'
+import { openRecognize } from './RecognizeDialog'
 import { MaterialSwatch } from './MaterialsPanel'
 import { resolveMaterial } from '@shared/materials'
 import { applyMaterial } from '@renderer/store/materialActions'
@@ -541,6 +543,9 @@ function ImageProps({ image, unit, precision }: { image: ImageObject; unit: Leng
           <Lock size={14} /> Bloquear
         </button>
       </div>
+      <button type="button" className="btn btn--block" disabled={!el} onClick={() => openRecognize(image.id)}>
+        <ScanSearch size={14} /> Reconhecer planta (IA)…
+      </button>
       <p className="form__section">Escala</p>
       <button type="button" className="btn btn--accent btn--block" onClick={() => startCalibration(image.id)}>
         <Ruler size={14} /> Definir escala (2 pontos)
