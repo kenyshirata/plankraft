@@ -4,6 +4,7 @@
  * Medidas baseadas em dimensões comerciais comuns no Brasil.
  */
 import type { BlockDef, BlockShape } from '@shared/blocks'
+import { DEFAULT_STAIR, stairDef } from '@shared/stairs'
 
 type Opt = Partial<Pick<Extract<BlockShape, { kind: 'rect' }>, 'fill' | 'dash' | 'weight' | 'r'>>
 const R = (x: number, y: number, w: number, h: number, o: Opt = {}): BlockShape => ({ kind: 'rect', x, y, w, h, fill: 'fill', ...o })
@@ -18,17 +19,6 @@ function def(id: string, name: string, category: string, width: number, height: 
 
 // ---------------------------------------------------------------- helpers
 
-/** Escada reta: sobe em direção a Y=0 (seta e "SOBE"); degraus de ~25 cm. */
-function stairShapes(width: number, length: number): BlockShape[] {
-  const treads = Math.round(length / 25)
-  const step = length / treads
-  const shapes: BlockShape[] = [R(0, 0, width, length)]
-  for (let i = 1; i < treads; i++) shapes.push(L(0, i * step, width, i * step, { weight: 0.6 }))
-  const cx = width / 2
-  shapes.push(L(cx, length - 30, cx, 40, { weight: 1 }), P([cx - 10, 58, cx, 38, cx + 10, 58], false, { weight: 1 }))
-  shapes.push({ kind: 'text', x: cx, y: length - 24, text: 'SOBE', size: 11, align: 'center', fill: 'ink' })
-  return shapes
-}
 
 /** Sofá com N assentos: encosto atrás, braços laterais, almofadas. */
 function sofa(seats: number, width: number, depth = 90): BlockShape[] {
@@ -182,8 +172,9 @@ export const BUILTIN_BLOCKS: BlockDef[] = [
   def('car', 'Carro', 'Jardim', 180, 450, [R(0, 0, 180, 450, { r: 36 }), R(20, 110, 140, 90, { r: 14 }), R(20, 210, 140, 100, { r: 10 }), R(26, 316, 128, 60, { r: 14 }), R(6, 70, 20, 40, { r: 6, fill: 'ink' }), R(154, 70, 20, 40, { r: 6, fill: 'ink' })]),
   def('pillar-rect', 'Pilar quadrado', 'Estrutura', 30, 30, [R(0, 0, 30, 30), L(0, 0, 30, 30, { weight: 0.5 }), L(30, 0, 0, 30, { weight: 0.5 })]),
   def('pillar-round', 'Pilar redondo', 'Estrutura', 30, 30, [E(15, 15, 15, 15), L(3, 3, 27, 27, { weight: 0.5 }), L(27, 3, 3, 27, { weight: 0.5 })]),
-  def('stair-straight', 'Escada reta', 'Escada', 90, 400, stairShapes(90, 400)),
-  def('stair-wide', 'Escada larga', 'Escada', 120, 400, stairShapes(120, 400)),
+  stairDef(DEFAULT_STAIR),
+  stairDef({ ...DEFAULT_STAIR, shape: 'L' }),
+  stairDef({ ...DEFAULT_STAIR, shape: 'U' }),
   def('circle', 'Círculo', 'Genéricos', 100, 100, [E(50, 50, 50, 50)]),
   def('rectangle', 'Retângulo', 'Genéricos', 100, 60, [R(0, 0, 100, 60)]),
   def('door-std', 'Porta padrão', 'Genéricos', 80, 80, [L(0, 0, 0, 80, { weight: 1.6 }), A(0, 0, 80, 0, 90, { dash: true, weight: 0.7 }), L(0, 0, 80, 0, { weight: 0.6 })]),

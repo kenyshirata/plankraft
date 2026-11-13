@@ -14,6 +14,8 @@ export type SymbolPrim =
 
 export interface SymbolSpec {
   type: 'door' | 'window'
+  /** Nicho: profundidade do recuo (cm). */
+  depth?: number
   variant?: DoorVariant | WindowVariant
   side?: 1 | -1
   hinge?: 'start' | 'end'
@@ -30,7 +32,8 @@ export const WINDOW_VARIANTS: { value: WindowVariant; label: string }[] = [
   { value: 'casement', label: 'De abrir' },
   { value: 'sliding', label: 'De correr' },
   { value: 'tilt', label: 'Basculante' },
-  { value: 'fixed', label: 'Fixa' }
+  { value: 'fixed', label: 'Fixa' },
+  { value: 'niche', label: 'Nicho (recuo na parede)' }
 ]
 
 const seg = (a: P, b: P, weight: 'heavy' | 'normal' | 'thin' = 'normal', dash = false): SymbolPrim => ({ kind: 'line', pts: [a, b], weight, dash })
@@ -85,6 +88,14 @@ function doorPrims(s: SymbolSpec, g: OpeningGeometry): SymbolPrim[] {
 
 function windowPrims(s: SymbolSpec, g: OpeningGeometry): SymbolPrim[] {
   const variant = (s.variant as WindowVariant | undefined) ?? 'casement'
+  if (variant === 'niche') {
+    const pocket = nichePocket(g, s.side ?? 1, s.depth ?? NICHE_DEPTH_DEFAULT)
+    return [
+      { kind: 'line', pts: pocket, closed: true, weight: 'normal' },
+      { kind: 'line', pts: [pocket[0], pocket[2]], weight: 'thin', dash: true },
+      { kind: 'line', pts: [pocket[1], pocket[3]], weight: 'thin', dash: true }
+    ]
+  }
   const hj = mul(g.normal, g.thickness / 2)
   const frame: SymbolPrim = { kind: 'line', pts: [add(g.start, hj), add(g.end, hj), sub(g.end, hj), sub(g.start, hj)], closed: true, weight: 'normal' }
   const glass = mul(g.normal, Math.min(g.thickness / 6, 3))
@@ -122,4 +133,14 @@ function windowPrims(s: SymbolSpec, g: OpeningGeometry): SymbolPrim[] {
 /** Primitivas do símbolo (sem o recorte da parede e os batentes, que são comuns). */
 export function openingPrims(s: SymbolSpec, g: OpeningGeometry): SymbolPrim[] {
   return s.type === 'window' ? windowPrims(s, g) : doorPrims(s, g)
+}
+
+export const NICHE_DEPTH_DEFAULT = 12
+
+/** Cavidade do nicho em planta: do plano da face aberta até `depth` cm para dentro da parede. */
+export function nichePocket(g: OpeningGeometry, side: 1 | -1, depth: number): P[] {
+  const d = Math.min(depth, Math.max(2, g.thickness - 2))
+  const face = mul(g.normal, (side * g.thickness) / 2)
+  const back = mul(g.normal, (side * (g.thickness / 2 - d)))
+  return [add(g.start, face), add(g.end, face), add(g.end, back), add(g.start, back)]
 }

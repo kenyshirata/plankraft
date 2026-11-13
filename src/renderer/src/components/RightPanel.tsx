@@ -28,6 +28,8 @@ import { resolveMaterial } from '@shared/materials'
 import { ZONES, ZONE_ORDER } from '@shared/zones'
 import type { RoomZone } from '@shared/model'
 import { DOOR_VARIANTS, WINDOW_VARIANTS } from '@renderer/lib/openingSymbols'
+import { parseStairId, stairId, stairLayout, STAIR_LIMITS, type StairParams } from '@shared/stairs'
+import { formatNumber } from '@renderer/lib/format'
 import { WINDOW_HEIGHT_DEFAULT, WINDOW_SILL_DEFAULT } from '@shared/model'
 import { applyMaterial } from '@renderer/store/materialActions'
 import { openOnboarding } from './Onboarding'
@@ -271,13 +273,31 @@ function WallProps({ wall, unit, precision }: { wall: WallObject; unit: LengthUn
           <button type="button" className="btn btn--sm" data-tooltip="Pé-direito do andar" onClick={() => setWallHeight(wall.id, undefined)}>
             Padrão
           </button>
-          <button type="button" className="btn btn--sm" data-tooltip="Cerca de 1,20 m" onClick={() => setWallHeight(wall.id, 120)}>
+          <button type="button" className="btn btn--sm" data-tooltip="Cerca de ripas de 1,20 m" onClick={() => setWallHeight(wall.id, 120, 'slats')}>
             Cerca
           </button>
           <button type="button" className="btn btn--sm" data-tooltip="Muro de 2,00 m" onClick={() => setWallHeight(wall.id, 200)}>
             Muro
           </button>
         </div>
+      </Field>
+      <Field label="Estilo">
+        <select
+          className="select"
+          value={wall.style ?? 'solid'}
+          onChange={(e) =>
+            commit((d) =>
+              updateObject(d, wall.id, 'wall', (o) => {
+                const { style: _s, ...rest } = o
+                void _s
+                return e.target.value === 'slats' ? { ...rest, style: 'slats' } : rest
+              })
+            )
+          }
+        >
+          <option value="solid">Parede / muro sólido</option>
+          <option value="slats">Cerca de ripas (3D)</option>
+        </select>
       </Field>
       <MaterialField id={wall.material} label="Acabamento" />
       <Field label="Ângulo">
@@ -330,7 +350,11 @@ function OpeningProps({ opening, unit, precision }: { opening: OpeningObject; un
         <select
           className="select"
           value={opening.variant ?? (opening.type === 'door' ? 'swing' : 'casement')}
-          onChange={(e) => setPatch({ variant: e.target.value } as Partial<OpeningObject>)}
+          onChange={(e) =>
+            setPatch(
+              (e.target.value === 'niche' ? { variant: 'niche', width: 50, sill: 90, height: 60, depth: 12, side: 1 } : { variant: e.target.value }) as Partial<OpeningObject>
+            )
+          }
         >
           {(opening.type === 'door' ? DOOR_VARIANTS : WINDOW_VARIANTS).map((v) => (
             <option key={v.value} value={v.value}>
@@ -339,6 +363,22 @@ function OpeningProps({ opening, unit, precision }: { opening: OpeningObject; un
           ))}
         </select>
       </Field>
+      {opening.type === 'window' && opening.variant === 'niche' && (
+        <>
+          <Field label="Profundidade">
+            <NumberField
+              value={opening.depth ?? 12}
+              min={3}
+              max={Math.max(3, Math.round(wall.thickness - 2))}
+              suffix="cm"
+              onCommit={(depth) => setPatch({ depth } as Partial<OpeningObject>)}
+            />
+          </Field>
+          <button type="button" className="btn btn--block" onClick={() => setPatch({ side: (opening.side ?? 1) === 1 ? -1 : 1 } as Partial<OpeningObject>)}>
+            <FlipHorizontal2 size={14} /> Abrir para o outro lado
+          </button>
+        </>
+      )}
       {opening.type === 'window' && (
         <>
           <Field label="Peitoril">
@@ -413,6 +453,17 @@ function RoomProps({ room, unit, precision }: { room: RoomObject; unit: LengthUn
         </select>
       </Field>
       {room.zone === 'lot' && <LotInfo room={room} unit={unit} precision={precision} />}
+      {room.zone === 'drop' && (
+        <Field label="Rebaixo">
+          <NumberField
+            value={room.dropHeight ?? 15}
+            min={2}
+            max={100}
+            suffix="cm"
+            onCommit={(v) => commit((d) => updateObject(d, room.id, 'room', (r) => ({ ...r, dropHeight: v })))}
+          />
+        </Field>
+      )}
       <MaterialField id={room.material} label="Piso" />
       {!room.zone && (
         <button type="button" className="btn btn--block" onClick={() => refreshRoomFromWalls(room.id)}>
@@ -475,12 +526,13 @@ function LotInfo({ room, unit, precision }: { room: RoomObject; unit: LengthUnit
   )
 }
 
-function setWallHeight(id: string, height: number | undefined): void {
+function setWallHeight(id: string, height: number | undefined, style?: 'slats'): void {
   commit((d) =>
     updateObject(d, id, 'wall', (o) => {
-      const { height: _h, ...rest } = o
+      const { height: _h, style: _s, ...rest } = o
       void _h
-      return height === undefined ? rest : { ...rest, height }
+      void _s
+      return height === undefined ? rest : { ...rest, height, ...(style ? { style } : {}) }
     })
   )
 }
@@ -488,10 +540,11 @@ function setWallHeight(id: string, height: number | undefined): void {
 function setRoomZone(id: string, zone: RoomZone | null): void {
   commit((d) =>
     updateObject(d, id, 'room', (r) => {
-      const { zone: _z, material: _m, setback: _s, ...rest } = r
+      const { zone: _z, material: _m, setback: _s, dropHeight: _d, ...rest } = r
       void _z
       void _m
       void _s
+      void _d
       if (!zone) return rest
       const def = ZONES[zone]
       const renamed = /^Cômodo \d+$/.test(r.name) ? def.label : r.name
@@ -559,6 +612,7 @@ function BlockProps({ block }: { block: BlockObject }): React.JSX.Element {
   if (!def) return <p className="form__note">Definição do bloco não encontrada.</p>
   const w = def.width * block.scaleX
   const h = def.height * block.scaleY
+  const stair = parseStairId(def.id)
   return (
     <>
       <div className="block-head">
@@ -571,16 +625,22 @@ function BlockProps({ block }: { block: BlockObject }): React.JSX.Element {
           <span>{def.builtin ? def.category : `${def.category} · personalizado`}</span>
         </div>
       </div>
-      <Field label="Largura">
-        <NumberField value={Math.round(w * 10) / 10} min={1} max={5000} precision={0} suffix="cm" onCommit={(v) => setBlockSize(block.id, v, null, keepRatio)} />
-      </Field>
-      <Field label="Profundidade">
-        <NumberField value={Math.round(h * 10) / 10} min={1} max={5000} precision={0} suffix="cm" onCommit={(v) => setBlockSize(block.id, null, v, keepRatio)} />
-      </Field>
-      <label className="check">
-        <input type="checkbox" checked={keepRatio} onChange={(e) => setKeepRatio(e.target.checked)} />
-        Manter proporção
-      </label>
+      {stair ? (
+        <StairControls block={block} params={stair} />
+      ) : (
+        <>
+          <Field label="Largura">
+            <NumberField value={Math.round(w * 10) / 10} min={1} max={5000} precision={0} suffix="cm" onCommit={(v) => setBlockSize(block.id, v, null, keepRatio)} />
+          </Field>
+          <Field label="Profundidade">
+            <NumberField value={Math.round(h * 10) / 10} min={1} max={5000} precision={0} suffix="cm" onCommit={(v) => setBlockSize(block.id, null, v, keepRatio)} />
+          </Field>
+          <label className="check">
+            <input type="checkbox" checked={keepRatio} onChange={(e) => setKeepRatio(e.target.checked)} />
+            Manter proporção
+          </label>
+        </>
+      )}
       <Field label="Rotação">
         <NumberField value={Math.round(block.rotation * 10) / 10} min={-360} max={360} suffix="°" onCommit={(rotation) => patchBlock(block.id, { rotation: ((rotation % 360) + 360) % 360 })} />
       </Field>
@@ -604,6 +664,60 @@ function BlockProps({ block }: { block: BlockObject }): React.JSX.Element {
       <Field label="Traço">
         <ColorRow value={block.stroke} colors={INK_COLORS} onChange={(stroke) => patchBlock(block.id, { stroke })} />
       </Field>
+    </>
+  )
+}
+
+/** Escada paramétrica: tipo, largura, altura do degrau (espelho), piso e sentido da curva. */
+function StairControls({ block, params }: { block: BlockObject; params: StairParams }): React.JSX.Element {
+  const levelH = useEditorStore((s) => {
+    const layer = s.doc.layers.find((l) => l.id === block.layerId)
+    return s.doc.levels.find((l) => l.id === layer?.levelId)?.height ?? 300
+  })
+  const set = (patch: Partial<StairParams>): void => patchBlock(block.id, { blockId: stairId({ ...params, ...patch }) })
+  const riser = levelH / params.steps
+  const lay = stairLayout(params)
+  return (
+    <>
+      <Field label="Tipo">
+        <select className="select" value={params.shape} onChange={(e) => set({ shape: e.target.value as StairParams['shape'] })}>
+          <option value="straight">Reta</option>
+          <option value="L">Em L (com patamar)</option>
+          <option value="U">Em U (com patamar)</option>
+        </select>
+      </Field>
+      <Field label="Largura do lance">
+        <NumberField value={params.width} min={STAIR_LIMITS.width[0]} max={STAIR_LIMITS.width[1]} suffix="cm" onCommit={(v) => set({ width: v })} />
+      </Field>
+      <Field label="Altura do degrau">
+        <NumberField
+          value={Math.round(riser * 10) / 10}
+          precision={1}
+          min={12}
+          max={25}
+          suffix="cm"
+          onCommit={(v) => set({ steps: Math.round(levelH / Math.max(v, 1)) })}
+        />
+      </Field>
+      <Field label="Profundidade do piso">
+        <NumberField value={params.tread} precision={1} min={STAIR_LIMITS.tread[0]} max={STAIR_LIMITS.tread[1]} suffix="cm" onCommit={(v) => set({ tread: v })} />
+      </Field>
+      {params.shape !== 'straight' && (
+        <Field label="Curva">
+          <div className="button-row">
+            <button type="button" className={`btn btn--sm${params.turn === 'left' ? ' btn--accent' : ''}`} onClick={() => set({ turn: 'left' })}>
+              Esquerda
+            </button>
+            <button type="button" className={`btn btn--sm${params.turn === 'right' ? ' btn--accent' : ''}`} onClick={() => set({ turn: 'right' })}>
+              Direita
+            </button>
+          </div>
+        </Field>
+      )}
+      <p className="form__note">
+        {params.steps} degraus (espelho real {formatNumber(riser, 1)} cm) · ocupa {Math.round(lay.width)} × {Math.round(lay.height)} cm · pé-direito {Math.round(levelH)} cm.
+        A conta do conforto: 2 × espelho + piso ≈ 63 cm (agora {formatNumber(2 * riser + params.tread, 0)}).
+      </p>
     </>
   )
 }

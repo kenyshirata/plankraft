@@ -427,7 +427,7 @@ function SceneContent({
       ))}
 
       {labels &&
-        scene.floors.map((f) => (
+        scene.floors.filter((f) => f.zone !== 'drop').map((f) => (
           <Html key={`l-${f.id}`} position={[f.center[0], f.elevation + 0.05, f.center[1]]} center zIndexRange={[10, 0]} className="viewer3d__label">
             <strong>{f.name}</strong>
             <span>{formatNumber(f.area, 2)} m²</span>

@@ -36,7 +36,7 @@ export function RoomShapes({ rooms, palette, scale, selected, hoveredId, unit, p
         const tile = mat ? getTileCanvas(mat.id) : null
         const k = mat?.tileCm ? mat.tileCm / TILE_PX : 1
         // Com acabamento o piso aparece quase opaco; sem ele, fica como tinta translúcida.
-        const baseOpacity = r.zone === 'lot' ? 0.3 : r.zone === 'pool' ? 0.75 : mat ? 0.9 : 0.24
+        const baseOpacity = r.zone === 'lot' ? 0.3 : r.zone === 'drop' ? 0.45 : r.zone === 'pool' ? 0.75 : mat ? 0.9 : 0.24
         const flat = r.points.flatMap((p) => [p.x, p.y])
         const setback = r.zone === 'lot' && r.setback ? insetPolygon(r.points, r.setback) : null
         return (
@@ -56,6 +56,10 @@ export function RoomShapes({ rooms, palette, scale, selected, hoveredId, unit, p
             dash={isSel ? undefined : [6 * hair, 4 * hair]}
             perfectDrawEnabled={false}
           />
+          {r.zone === 'drop' && (
+            // Rebaixo de gesso: contorno pontilhado (aparece sobre o piso do cômodo).
+            <Line points={flat} closed stroke="#8a7f6a" strokeWidth={1.5 * hair} dash={[3 * hair, 4 * hair]} listening={false} perfectDrawEnabled={false} />
+          )}
           {r.zone === 'lot' && (
             // Divisa do terreno: traço-ponto sempre visível (a opacidade do preenchimento não a apaga).
             <Line points={flat} closed stroke="#6b5d1f" strokeWidth={2 * hair} dash={[16 * hair, 5 * hair, 3 * hair, 5 * hair]} listening={false} perfectDrawEnabled={false} />

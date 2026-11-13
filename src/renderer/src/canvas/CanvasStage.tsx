@@ -85,6 +85,7 @@ import { snapBlockToWalls } from '@renderer/lib/blockGeometry'
 import { BLOCK_DRAG_MIME } from '@renderer/components/LibraryPanel'
 import { computeWallGeometry } from './wallGeometry'
 import { GhostLevel } from './GhostLevel'
+import { isStairId } from '@shared/stairs'
 
 /** Raio (px de tela) para "grudar" em extremidades de paredes existentes. */
 const SNAP_RADIUS_PX = 10
@@ -254,7 +255,7 @@ export function CanvasStage(): React.JSX.Element {
       ? doc.objects
           .filter(
             (o) =>
-              (o.type === 'block' || (o.type === 'image' && !o.locked && !o.hidden)) &&
+              ((o.type === 'block' && !isStairId(o.blockId)) || (o.type === 'image' && !o.locked && !o.hidden)) &&
               selectedSet.has(o.id) &&
               editable.has(o.layerId) &&
               visibleLayerIds.has(o.layerId)
@@ -434,7 +435,9 @@ export function CanvasStage(): React.JSX.Element {
     const o: OpeningObject =
       tool === 'door'
         ? { ...base, type: 'door', width: settings.doorWidth, side: p.side, hinge: doorHinge, ...(settings.doorVariant !== 'swing' ? { variant: settings.doorVariant } : {}) }
-        : { ...base, type: 'window', width: settings.windowWidth, ...(settings.windowVariant !== 'casement' ? { variant: settings.windowVariant } : {}) }
+        : settings.windowVariant === 'niche'
+          ? { ...base, type: 'window', width: 50, variant: 'niche', sill: 90, height: 60, depth: 12, side: p.side }
+          : { ...base, type: 'window', width: settings.windowWidth, ...(settings.windowVariant !== 'casement' ? { variant: settings.windowVariant } : {}) }
     useEditorStore.getState().commit((d) => addObjects(d, [o]))
   }
 

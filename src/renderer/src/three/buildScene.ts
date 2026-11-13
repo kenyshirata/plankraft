@@ -16,6 +16,7 @@ import * as THREE from 'three'
 import type { BlockDef, BlockShape } from '@shared/blocks'
 import { WINDOW_HEIGHT_DEFAULT, WINDOW_SILL_DEFAULT } from '@shared/model'
 import { ZONES } from '@shared/zones'
+import { parseStairId, stairLayout } from '@shared/stairs'
 import type { RoomZone } from '@shared/model'
 import type { BlockObject, DoorObject, Id, ImageObject, OpeningObject, PlanDocument, RoomObject, WallObject, WindowObject } from '@shared/model'
 import { distance, normalize, perp, pointInPolygon, polygonArea, polygonCentroid, sub } from '@renderer/lib/geometry'
@@ -77,7 +78,10 @@ export interface ImagePiece {
 
 /** Escada para o passeio: contorno (x, z em m), piso de partida e altura vencida. */
 export interface StairPiece {
-  quad: [number, number][]
+  /** Degraus (retângulos, x/z em m) com a altura do topo sobre o piso do andar (m). */
+  treads: { pts: [number, number][]; top: number }[]
+  /** Contorno da escada (x, z em m). */
+  footprint: [number, number][]
   elevation: number
   height: number
 }
@@ -264,6 +268,17 @@ function toShape(points: { x: number; y: number }[], holes: { x: number; y: numb
 }
 
 const STAIR_PREFIX = 'builtin:stair'
+
+/** Contorno (cm, no mundo) da escada — também é o furo na laje de cima. */
+function stairFootprint(b: BlockObject, def: BlockDef): { x: number; y: number }[] {
+  const sp = parseStairId(def.id)
+  if (!sp) return stairQuad(b, def)
+  const lay = stairLayout(sp)
+  const m = instanceMatrix(b, def)
+  const out: { x: number; y: number }[] = []
+  for (let i = 0; i < lay.footprint.length; i += 2) out.push(apply(m, { x: lay.footprint[i], y: lay.footprint[i + 1] }))
+  return out
+}
 const SLAB = 0.15
 
 /** Contorno (cm, no mundo) de uma escada: cantos TL, TR, BR, BL do símbolo. */
@@ -304,7 +319,7 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
     const quads: { x: number; y: number }[][] = []
     for (const b of levelObjects(level.id).filter((o): o is BlockObject => o.type === 'block')) {
       const def = opts.resolveBlock(b.blockId)
-      if (def?.id.startsWith(STAIR_PREFIX)) quads.push(stairQuad(b, def))
+      if (def?.id.startsWith(STAIR_PREFIX)) quads.push(stairFootprint(b, def))
     }
     stairsByLevel.set(level.id, quads)
   }
@@ -372,6 +387,39 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
       })
       .sort((p, q) => p.from - q.from)
 
+    if (w.style === 'slats') {
+      // Cerca de ripas: postes, dois travessões e ripas verticais; aberturas viram portões (vão livre).
+      const wood = mat?.color ?? tint.get(w.layerId) ?? '#a8794a'
+      const gates = ops.map((op) => [op.from, op.to] as const)
+      const inGate = (s: number, pad = 0): boolean => gates.some(([a, b]) => s > a - pad && s < b + pad)
+      const slatDepth = Math.min(t, 0.03)
+      for (let s = s0 + 5; s < s1 - 3; s += 10) {
+        if (!inGate(s, 3)) piece(s - 3, s + 3, 0.04, Hw, 'wall', slatDepth, wood)
+      }
+      // travessões entre os portões
+      const spans: [number, number][] = []
+      let from = s0
+      for (const [a, b] of gates) {
+        if (a > from) spans.push([from, a])
+        from = Math.max(from, b)
+      }
+      if (s1 > from) spans.push([from, s1])
+      for (const [a, b] of spans) {
+        piece(a, b, Math.min(0.25, Hw * 0.2), Math.min(0.25, Hw * 0.2) + 0.06, 'wall', Math.max(0.04, slatDepth + 0.02), wood)
+        piece(a, b, Math.max(Hw - 0.3, 0.1), Math.max(Hw - 0.3, 0.1) + 0.06, 'wall', Math.max(0.04, slatDepth + 0.02), wood)
+      }
+      // postes: pontas, bordas dos portões e a cada ~2,5 m
+      const postAt = (s: number): void => piece(s - 4, s + 4, 0, Hw + 0.03, 'wall', 0.08, '#8d6b4a')
+      postAt(s0 + 4)
+      postAt(s1 - 4)
+      for (const [a, b] of gates) {
+        postAt(a - 4)
+        postAt(b + 4)
+      }
+      for (const [a, b] of spans) for (let s = a + 250; s < b - 100; s += 250) postAt(s)
+      continue
+    }
+
     let cursor = s0
     for (const op of ops) {
       if (op.from < cursor) continue // aberturas sobrepostas: ignora a segunda
@@ -424,7 +472,21 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
         const sill = Math.min(((win.sill ?? WINDOW_SILL_DEFAULT) / 100), Hw)
         const top = Math.min(sill + (win.height ?? WINDOW_HEIGHT_DEFAULT) / 100, Hw)
         piece(op.from, op.to, 0, sill)
-        if (top > sill) {
+        if (top > sill && win.variant === 'niche') {
+          // Nicho: parede de fundo mais fina, encostada na face oposta à abertura.
+          const depthM = Math.min((win.depth ?? 12) / 100, Math.max(0.02, t - 0.02))
+          const back = Math.max(0.02, t - depthM)
+          const sd = win.side ?? 1
+          const off = (-sd * (t - back)) / 2
+          const mid = at((op.from + op.to) / 2)
+          boxes.push({
+            position: [(mid.x + nrm.x * (off / M)) * M, (sill + top) / 2 + yOff, (mid.y + nrm.y * (off / M)) * M],
+            rotationY,
+            size: [op.width * M, top - sill, back],
+            kind: 'wall',
+            color
+          })
+        } else if (top > sill) {
           if (win.variant === 'sliding') {
             const mid = (op.from + op.to) / 2
             const over = op.width * 0.05
@@ -445,6 +507,8 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   const below = li > 0 ? (stairsByLevel.get(doc.levels[li - 1].id) ?? []) : []
   for (const r of objects.filter((o): o is RoomObject => o.type === 'room')) {
     const zone = r.zone
+    // Rebaixo de gesso só faz sentido com o teto à vista (some na vista cortada).
+    if (zone === 'drop' && opts.cutHeight !== null) continue
     const holes = zone ? [] : below.filter((q) => pointInPolygon(polygonCentroid(q), r.points))
     const shape = toShape(r.points, holes)
     const zoneH = zone ? ZONES[zone].height : 0
@@ -452,7 +516,9 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
     const geometry: THREE.BufferGeometry =
       zone && zoneH > 0 ? new THREE.ExtrudeGeometry(shape, { depth: zoneH, bevelEnabled: false }) : new THREE.ShapeGeometry(shape)
     geometry.rotateX(-Math.PI / 2)
-    geometry.translate(0, yOff + (zone === 'lot' ? -0.002 : 0), 0)
+    // Rebaixo: placa colada ao teto, `dropHeight` cm abaixo dele.
+    const dropY = zone === 'drop' ? wallH - (r.dropHeight ?? 15) / 100 - zoneH : 0
+    geometry.translate(0, yOff + (zone === 'lot' ? -0.002 : 0) + dropY, 0)
     let slab: THREE.BufferGeometry | undefined
     if (li > 0 && !zone) {
       slab = new THREE.ExtrudeGeometry(shape, { depth: SLAB, bevelEnabled: false })
@@ -516,22 +582,30 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
       continue
     }
     if (def.id.startsWith(STAIR_PREFIX)) {
-      // Escada: degraus subindo até o piso do andar de cima.
-      const [tl, tr, br, bl] = stairQuad(b, def)
-      const n = Math.max(2, Math.round(levelH / 0.175))
-      const lerp = (a: { x: number; y: number }, c: { x: number; y: number }, t: number): { x: number; y: number } => ({
-        x: a.x + (c.x - a.x) * t,
-        y: a.y + (c.y - a.y) * t
-      })
-      for (let i = 0; i < n; i++) {
-        const quad = [lerp(bl, tl, i / n), lerp(br, tr, i / n), lerp(br, tr, (i + 1) / n), lerp(bl, tl, (i + 1) / n)]
-        const g = new THREE.ExtrudeGeometry(toShape(quad), { depth: ((i + 1) * levelH) / n, bevelEnabled: false })
+      // Escada paramétrica: cada degrau é um bloco sólido do piso até o topo do degrau.
+      const sp = parseStairId(def.id)
+      if (!sp) continue
+      const lay = stairLayout(sp)
+      const m = instanceMatrix(b, def)
+      const riser = levelH / sp.steps
+      const treadPieces: StairPiece['treads'] = []
+      for (const t of lay.treads) {
+        const quad = [
+          { x: t.x, y: t.y },
+          { x: t.x + t.w, y: t.y },
+          { x: t.x + t.w, y: t.y + t.h },
+          { x: t.x, y: t.y + t.h }
+        ].map((q) => apply(m, q))
+        const top = t.level * riser
+        const g = new THREE.ExtrudeGeometry(toShape(quad), { depth: top, bevelEnabled: false })
         g.rotateX(-Math.PI / 2)
         g.translate(0, yOff, 0)
         furniture.push({ geometry: g, color: b.fill ?? '#cdbfa8' })
+        treadPieces.push({ pts: quad.map((q) => [q.x * M, q.y * M] as [number, number]), top })
       }
-      pts2d.push(tl, tr, br, bl)
-      stairs.push({ quad: [tl, tr, br, bl].map((q) => [q.x * M, q.y * M] as [number, number]), elevation: yOff, height: levelH })
+      const fp = stairFootprint(b, def)
+      pts2d.push(...fp)
+      stairs.push({ treads: treadPieces, footprint: fp.map((q) => [q.x * M, q.y * M] as [number, number]), elevation: yOff, height: levelH })
       continue
     }
     const style = STYLES[def.id] ?? DEFAULT_STYLE

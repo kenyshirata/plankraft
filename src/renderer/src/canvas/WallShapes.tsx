@@ -64,6 +64,7 @@ export function WallShapes({ walls, geometry, palette, scale, selected, hoveredI
             strokePatternScale={tile ? { x: k, y: k } : undefined}
             strokePatternRepeat="repeat"
             strokeWidth={w.thickness}
+            dash={w.style === 'slats' ? [9, 6] : undefined}
             hitStrokeWidth={Math.max(w.thickness, 12 * hair)}
             lineCap="butt"
             perfectDrawEnabled={false}

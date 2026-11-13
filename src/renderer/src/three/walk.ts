@@ -2,7 +2,7 @@
  * Lógica do passeio em primeira pessoa (sem three/React, para ser testável):
  * colisão do corpo (círculo) com as paredes e altura do chão (andares e escadas).
  */
-import type { BoxPiece, Scene3D, StairPiece } from './buildScene'
+import type { BoxPiece, Scene3D } from './buildScene'
 
 export const EYE_HEIGHT = 1.6
 export const BODY_RADIUS = 0.25
@@ -96,31 +96,22 @@ function inQuad(x: number, z: number, q: [number, number][]): boolean {
   return inside
 }
 
-/** Altura do degrau da escada no ponto (progresso 0 = base, 1 = topo). */
-function stairGround(x: number, z: number, s: StairPiece): number {
-  const [tl, tr, br, bl] = s.quad
-  const mb = [(bl[0] + br[0]) / 2, (bl[1] + br[1]) / 2]
-  const mt = [(tl[0] + tr[0]) / 2, (tl[1] + tr[1]) / 2]
-  const ax = mt[0] - mb[0]
-  const az = mt[1] - mb[1]
-  const t = Math.max(0, Math.min(1, ((x - mb[0]) * ax + (z - mb[1]) * az) / (ax * ax + az * az)))
-  // Os degraus são discretos: o piso sobe por patamares inteiros.
-  return s.elevation + s.height * t
-}
-
 /**
- * Chão no ponto: sobre uma escada compatível com a altura atual segue o degrau;
- * senão é o piso mais alto que se alcança sem passar do degrau tolerado.
- * Devolve null quando o ponto cai no vão de uma escada sem acesso (bloqueado).
+ * Chão no ponto: sobre um degrau compatível com a altura atual segue o degrau
+ * (os degraus são discretos); senão é o piso mais alto que se alcança sem passar
+ * do degrau tolerado. Devolve null quando o ponto cai no vão de uma escada sem acesso.
  */
 export function groundAt(x: number, z: number, current: number, scene: Scene3D): number | null {
   let onStair: number | null = null
   let inAny = false
   for (const s of scene.stairs) {
-    if (!inQuad(x, z, s.quad)) continue
+    if (!inQuad(x, z, s.footprint)) continue
     inAny = true
-    const g = stairGround(x, z, s)
-    if (Math.abs(g - current) <= 0.6 && (onStair === null || Math.abs(g - current) < Math.abs(onStair - current))) onStair = g
+    for (const t of s.treads) {
+      if (!inQuad(x, z, t.pts)) continue
+      const g = s.elevation + t.top
+      if (Math.abs(g - current) <= 0.6 && (onStair === null || Math.abs(g - current) < Math.abs(onStair - current))) onStair = g
+    }
   }
   if (onStair !== null) return onStair
   if (inAny) return null

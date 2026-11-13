@@ -7,6 +7,7 @@ import { create } from 'zustand'
 import { normalizeLibraryFile, type BlockDef, type BlockLibraryFile } from '@shared/blocks'
 import type { PlanDocument } from '@shared/model'
 import { BUILTIN_BY_ID } from '@renderer/blocks/builtin'
+import { stairDefFromId } from '@shared/stairs'
 import { toast } from './toastStore'
 
 const LS_KEY = 'plankraft-block-library'
@@ -77,7 +78,7 @@ export const useLibraryStore = create<LibraryState>()((set, get) => {
  * (O projeto vem antes da biblioteca: o arquivo é a fonte da verdade do desenho.)
  */
 export function resolveBlock(id: string, doc: PlanDocument): BlockDef | undefined {
-  return BUILTIN_BY_ID.get(id) ?? doc.blocks.find((b) => b.id === id) ?? useLibraryStore.getState().blocks.find((b) => b.id === id)
+  return BUILTIN_BY_ID.get(id) ?? stairDefFromId(id) ?? doc.blocks.find((b) => b.id === id) ?? useLibraryStore.getState().blocks.find((b) => b.id === id)
 }
 
 /** Garante que a definição de um bloco personalizado esteja embutida no documento. */

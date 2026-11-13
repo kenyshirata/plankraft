@@ -16,9 +16,10 @@ export const ZONES: Record<RoomZone, ZoneDef> = {
   lawn: { label: 'Gramado', color: '#6aa84f', material: 'grass', height: 0.03 },
   deck: { label: 'Deck', color: '#a8794a', material: 'deck', height: 0.1 },
   paving: { label: 'Calçada / piso externo', color: '#9b9b9b', material: 'pavers', height: 0.05 },
-  pool: { label: 'Piscina', color: '#4fb3e8', material: undefined, height: 0.04 }
+  pool: { label: 'Piscina', color: '#4fb3e8', material: undefined, height: 0.04 },
+  drop: { label: 'Rebaixo de gesso', color: '#e9e4da', material: undefined, height: 0.06 }
 }
 
-export const ZONE_ORDER: RoomZone[] = ['lot', 'lawn', 'paving', 'deck', 'pool']
+export const ZONE_ORDER: RoomZone[] = ['lot', 'lawn', 'paving', 'deck', 'pool', 'drop']
 
 export const isZone = (v: unknown): v is RoomZone => typeof v === 'string' && v in ZONES

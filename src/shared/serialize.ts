@@ -69,7 +69,8 @@ function normalizeObject(v: unknown, layerIds: Set<string>, fallbackLayer: strin
             b,
             thickness: Math.max(1, num(v.thickness, 15)),
             ...(typeof v.material === 'string' ? { material: v.material } : {}),
-            ...(typeof v.height === 'number' && Number.isFinite(v.height) ? { height: Math.min(600, Math.max(20, v.height)) } : {})
+            ...(typeof v.height === 'number' && Number.isFinite(v.height) ? { height: Math.min(600, Math.max(20, v.height)) } : {}),
+            ...(v.style === 'slats' ? { style: 'slats' as const } : {})
           }
         : null
     }
@@ -78,7 +79,7 @@ function normalizeObject(v: unknown, layerIds: Set<string>, fallbackLayer: strin
       if (typeof v.wallId !== 'string') return null
       const base = { id, layerId, wallId: v.wallId, offset: num(v.offset, 0), width: Math.max(10, num(v.width, 80)) }
       const dv = ['double', 'sliding', 'open'].includes(v.variant as string) ? (v.variant as DoorVariant) : undefined
-      const wv = ['sliding', 'tilt', 'fixed'].includes(v.variant as string) ? (v.variant as WindowVariant) : undefined
+      const wv = ['sliding', 'tilt', 'fixed', 'niche'].includes(v.variant as string) ? (v.variant as WindowVariant) : undefined
       return v.type === 'door'
         ? { ...base, type: 'door', side: v.side === -1 ? -1 : 1, hinge: v.hinge === 'end' ? 'end' : 'start', ...(dv ? { variant: dv } : {}) }
         : {
@@ -86,7 +87,9 @@ function normalizeObject(v: unknown, layerIds: Set<string>, fallbackLayer: strin
             type: 'window',
             ...(wv ? { variant: wv } : {}),
             ...(typeof v.sill === 'number' && Number.isFinite(v.sill) ? { sill: Math.min(250, Math.max(0, v.sill)) } : {}),
-            ...(typeof v.height === 'number' && Number.isFinite(v.height) ? { height: Math.min(250, Math.max(20, v.height)) } : {})
+            ...(typeof v.height === 'number' && Number.isFinite(v.height) ? { height: Math.min(250, Math.max(20, v.height)) } : {}),
+            ...(v.side === -1 ? { side: -1 as const } : v.side === 1 ? { side: 1 as const } : {}),
+            ...(typeof v.depth === 'number' && Number.isFinite(v.depth) ? { depth: Math.min(60, Math.max(3, v.depth)) } : {})
           }
     }
     case 'room': {
@@ -101,7 +104,8 @@ function normalizeObject(v: unknown, layerIds: Set<string>, fallbackLayer: strin
             color: str(v.color, '#7aa2ff'),
             ...(typeof v.material === 'string' ? { material: v.material } : {}),
             ...(isZone(v.zone) ? { zone: v.zone } : {}),
-            ...(typeof v.setback === 'number' && Number.isFinite(v.setback) ? { setback: Math.min(2000, Math.max(0, v.setback)) } : {})
+            ...(typeof v.setback === 'number' && Number.isFinite(v.setback) ? { setback: Math.min(2000, Math.max(0, v.setback)) } : {}),
+            ...(typeof v.dropHeight === 'number' && Number.isFinite(v.dropHeight) ? { dropHeight: Math.min(100, Math.max(2, v.dropHeight)) } : {})
           }
         : null
     }

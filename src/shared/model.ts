@@ -62,7 +62,7 @@ interface BaseObject {
 }
 
 /** Tipo de área de um "cômodo": ausente = ambiente interno; os demais são áreas externas. */
-export type RoomZone = 'lot' | 'lawn' | 'deck' | 'paving' | 'pool'
+export type RoomZone = 'lot' | 'lawn' | 'deck' | 'paving' | 'pool' | 'drop'
 
 export interface WallObject extends BaseObject {
   type: 'wall'
@@ -75,6 +75,8 @@ export interface WallObject extends BaseObject {
   material?: string
   /** Altura (cm); ausente = pé-direito do andar. Muros e cercas usam alturas menores. */
   height?: number
+  /** 'slats' = cerca de ripas (3D); ausente = parede sólida. */
+  style?: 'solid' | 'slats'
 }
 
 /**
@@ -92,7 +94,7 @@ interface OpeningBase extends BaseObject {
 /** Tipo de porta: de abrir (padrão), dupla, de correr ou vão livre (sem folha). */
 export type DoorVariant = 'swing' | 'double' | 'sliding' | 'open'
 /** Tipo de janela: de abrir (padrão), de correr, basculante ou fixa. */
-export type WindowVariant = 'casement' | 'sliding' | 'tilt' | 'fixed'
+export type WindowVariant = 'casement' | 'sliding' | 'tilt' | 'fixed' | 'niche'
 
 export const WINDOW_SILL_DEFAULT = 100
 export const WINDOW_HEIGHT_DEFAULT = 110
@@ -114,6 +116,9 @@ export interface WindowObject extends OpeningBase {
   /** Altura do peitoril (cm do piso) e altura da janela (cm). Ausentes = 100 e 110. */
   sill?: number
   height?: number
+  /** Nicho: lado para onde abre (1 = esquerda de a→b) e profundidade do recuo (cm). */
+  side?: 1 | -1
+  depth?: number
 }
 
 export type OpeningObject = DoorObject | WindowObject
@@ -131,6 +136,8 @@ export interface RoomObject extends BaseObject {
   zone?: RoomZone
   /** Terreno: recuo obrigatório (cm) desenhado para dentro da divisa. */
   setback?: number
+  /** Rebaixo de gesso: quanto desce do teto (cm). */
+  dropHeight?: number
 }
 
 export interface TextObject extends BaseObject {

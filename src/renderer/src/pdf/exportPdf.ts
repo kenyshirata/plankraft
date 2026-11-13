@@ -30,7 +30,7 @@ import { formatArea, formatLength } from '@renderer/lib/format'
 import { resolveMaterial } from '@shared/materials'
 import { computeWallGeometry, extendedPoints } from '@renderer/canvas/wallGeometry'
 import { openingGeometry } from '@renderer/lib/openings'
-import { openingPrims } from '@renderer/lib/openingSymbols'
+import { NICHE_DEPTH_DEFAULT, nichePocket, openingPrims } from '@renderer/lib/openingSymbols'
 import { insetPolygon } from '@renderer/lib/geometry'
 import { planarFaces } from '@renderer/lib/rooms'
 import { cornerAngles, exteriorSides, layoutDimensions, measuredSegment } from '@renderer/lib/dimensions'
@@ -417,13 +417,26 @@ function drawPdfPage(pdf: jsPDF, L: PdfLayout, doc: PlanDocument, opts: PdfOptio
     if (!wall) return
     const g = openingGeometry(o, wall)
     const h = mul(g.normal, g.thickness / 2 + 0.6 / L.factor)
-    // Vão branco recortando a parede
-    fillPath([add(g.start, h), add(g.end, h), sub(g.end, h), sub(g.start, h)], '#ffffff')
-    const hj = mul(g.normal, g.thickness / 2)
     const ink = tint ?? COLORS.ink
-    strokePath([add(g.start, hj), sub(g.start, hj)], false, COLORS.wall, 0.25)
-    strokePath([add(g.end, hj), sub(g.end, hj)], false, COLORS.wall, 0.25)
-    for (const pr of openingPrims({ type: o.type, variant: o.variant, side: o.type === 'door' ? o.side : undefined, hinge: o.type === 'door' ? o.hinge : undefined }, g)) {
+    const isNiche = o.type === 'window' && o.variant === 'niche'
+    if (isNiche) {
+      // Nicho: só a cavidade é recortada.
+      fillPath(nichePocket(g, o.side ?? 1, o.depth ?? NICHE_DEPTH_DEFAULT), '#ffffff')
+    } else {
+      // Vão branco recortando a parede
+      fillPath([add(g.start, h), add(g.end, h), sub(g.end, h), sub(g.start, h)], '#ffffff')
+      const hj = mul(g.normal, g.thickness / 2)
+      strokePath([add(g.start, hj), sub(g.start, hj)], false, COLORS.wall, 0.25)
+      strokePath([add(g.end, hj), sub(g.end, hj)], false, COLORS.wall, 0.25)
+    }
+    const spec = {
+      type: o.type,
+      variant: o.variant,
+      side: o.type === 'door' ? o.side : o.type === 'window' ? o.side : undefined,
+      hinge: o.type === 'door' ? o.hinge : undefined,
+      depth: o.type === 'window' ? o.depth : undefined
+    }
+    for (const pr of openingPrims(spec, g)) {
       if (pr.kind === 'line') {
         const w = pr.weight === 'heavy' ? 0.25 : pr.weight === 'thin' ? 0.12 : 0.16
         strokePath(pr.pts, !!pr.closed, ink, w, pr.dash ? [0.8, 0.6] : undefined)

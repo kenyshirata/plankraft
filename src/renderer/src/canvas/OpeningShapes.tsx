@@ -1,7 +1,7 @@
 import { Group, Line, Shape } from 'react-konva'
 import type { DoorVariant, Id, OpeningObject, WallObject, WindowVariant } from '@shared/model'
 import { mul } from '@renderer/lib/geometry'
-import { openingPrims, type SymbolPrim } from '@renderer/lib/openingSymbols'
+import { NICHE_DEPTH_DEFAULT, nichePocket, openingPrims, type SymbolPrim } from '@renderer/lib/openingSymbols'
 import { openingGeometry, openingRectPoints, type OpeningGeometry } from '@renderer/lib/openings'
 import type { CanvasPalette } from '@renderer/theme'
 
@@ -37,7 +37,7 @@ export function OpeningShapes({ openings, wallsById, palette, scale, selected, h
 }
 
 interface SymbolProps {
-  opening: Pick<OpeningObject, 'type'> & Partial<Pick<OpeningObject, 'id'>> & { side?: 1 | -1; hinge?: 'start' | 'end'; variant?: DoorVariant | WindowVariant }
+  opening: Pick<OpeningObject, 'type'> & Partial<Pick<OpeningObject, 'id'>> & { side?: 1 | -1; hinge?: 'start' | 'end'; variant?: DoorVariant | WindowVariant; depth?: number }
   g: OpeningGeometry
   palette: CanvasPalette
   scale: number
@@ -52,6 +52,9 @@ export function OpeningSymbol({ opening, g, palette, scale, state, tint }: Symbo
     state === 'selected' || state === 'preview' ? palette.accent : state === 'hover' ? palette.hover : (tint ?? palette.text)
   const lw = (state === 'selected' ? 2 : 1.25) * hair
   const half = mul(g.normal, g.thickness / 2)
+  const niche = opening.type === 'window' && opening.variant === 'niche'
+  // Nicho: só a cavidade é recortada (a parede continua atrás dela).
+  const pocket = niche ? nichePocket(g, opening.side ?? 1, opening.depth ?? NICHE_DEPTH_DEFAULT) : null
 
   return (
     <Group opacity={state === 'preview' ? 0.85 : 1}>
@@ -59,14 +62,14 @@ export function OpeningSymbol({ opening, g, palette, scale, state, tint }: Symbo
       <Line
         id={opening.id}
         name={opening.id ? 'plan-object' : undefined}
-        points={openingRectPoints(g, 3.5 * hair)}
+        points={pocket ? pocket.flatMap((q) => [q.x, q.y]) : openingRectPoints(g, 3.5 * hair)}
         closed
         fill={palette.background}
         listening={!!opening.id}
         perfectDrawEnabled={false}
       />
       {/* Batentes */}
-      {[g.start, g.end].map((p, i) => (
+      {(niche ? [] : [g.start, g.end]).map((p, i) => (
         <Line
           key={i}
           points={[p.x + half.x, p.y + half.y, p.x - half.x, p.y - half.y]}
@@ -75,7 +78,7 @@ export function OpeningSymbol({ opening, g, palette, scale, state, tint }: Symbo
           listening={false}
         />
       ))}
-      <Prims prims={openingPrims({ type: opening.type, variant: opening.variant, side: opening.side, hinge: opening.hinge }, g)} ink={ink} lw={lw} />
+      <Prims prims={openingPrims({ type: opening.type, variant: opening.variant, side: opening.side, hinge: opening.hinge, depth: opening.depth }, g)} ink={ink} lw={lw} />
     </Group>
   )
 }
