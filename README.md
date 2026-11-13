@@ -12,7 +12,7 @@ exporte **PDF vetorial em escala**, veja a **maquete 3D** e gere plantas a parti
 |---|---|
 | **Desenho** — paredes (linha, polilinha ou retângulo) com ímã e trava de 45°, portas e janelas que se encaixam na parede, cômodos com área útil calculada, textos e medidas. | ![Cotas automáticas](docs/images/cotas-automaticas.png) |
 | **Cotas automáticas** — toda parede ganha cota (inclusive diagonais, com texto sempre legível), no lado externo, escalonadas quando se sobrepõem, com ângulos entre paredes. | |
-| **Blocos** — 32 móveis vetoriais (sala, quarto, cozinha, banheiro, área externa), arrastar para o desenho, encaixe automático na parede, girar/espelhar/redimensionar e blocos personalizados que atualizam todas as cópias. | ![Biblioteca de blocos](docs/images/blocos.png) |
+| **Blocos** — mais de 75 símbolos vetoriais (sala, quarto, cozinha, banheiro, escritório, garagem e lazer, jardim, escada, estrutura) e **modelos 3D próprios** (.glb) que viram blocos e aparecem em volume na maquete, arrastar para o desenho, encaixe automático na parede, girar/espelhar/redimensionar e blocos personalizados que atualizam todas as cópias. | ![Biblioteca de blocos](docs/images/blocos.png) |
 | **Camadas** — nomeadas, reordenáveis por arrastar, com visibilidade, bloqueio, opacidade e cor. | |
 | **Gerar planta** — descreva "casa de 80 m² com 2 quartos e cozinha americana" e escolha entre 2–3 variações. Modo **offline** (gerador procedural, sem chave e sem custo) ou com **IA** (Claude ou OpenAI, chave criptografada). | ![Gerar planta offline](docs/images/gerar-offline.png) |
 | **PDF vetorial** — A4, A3, A2 ou Carta, escala 1:50 / 1:100 / 1:200 ou ajustada, escolha de camadas, quadro de áreas e carimbo. | ![Exportar PDF](docs/images/exportar-pdf.png) |

@@ -22,6 +22,7 @@ const api: PlanKraftApi = {
   loadLibrary: () => ipcRenderer.invoke(IPC.loadLibrary),
   saveLibrary: (data) => ipcRenderer.invoke(IPC.saveLibrary, data),
   importImage: () => ipcRenderer.invoke(IPC.importImage),
+  importModel: () => ipcRenderer.invoke(IPC.importModel),
   loadAssets: (projectPath, keys) => ipcRenderer.invoke(IPC.loadAssets, projectPath, keys),
   savePdf: (req) => ipcRenderer.invoke(IPC.savePdf, req),
   aiStatus: () => ipcRenderer.invoke(IPC.aiStatus),

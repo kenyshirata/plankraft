@@ -11,7 +11,7 @@ import { normalizeLibraryFile, type BlockLibraryFile } from '../shared/blocks'
 import { IPC } from '../shared/ipc'
 import { assertTrustedSender } from './security'
 
-const MAX_BYTES = 10 * 1024 * 1024
+const MAX_BYTES = 48 * 1024 * 1024 // blocos com modelo 3D embutido (até 3 MB cada)
 const libraryPath = (): string => join(app.getPath('userData'), 'block-library.json')
 
 async function readLibrary(): Promise<BlockLibraryFile> {

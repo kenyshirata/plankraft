@@ -5,12 +5,13 @@
  * R gira, Esc sai).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, PackagePlus, Search, Star, X } from 'lucide-react'
+import { Box, ChevronDown, ChevronRight, PackagePlus, Search, Star, X } from 'lucide-react'
 import type { BlockDef } from '@shared/blocks'
 import { BUILTIN_BLOCKS, BUILTIN_CATEGORIES } from '@renderer/blocks/builtin'
 import { useEditorStore } from '@renderer/store/editorStore'
 import { useLibraryStore } from '@renderer/store/libraryStore'
 import { addProjectBlockToLibrary, redefineBlockFromSelection } from '@renderer/store/blockActions'
+import { importModelBlock } from '@renderer/store/modelActions'
 import { confirmDialog } from '@renderer/store/dialogStore'
 import { BlockSvg } from './BlockSvg'
 import { openBlockDialog } from './BlockDialog'
@@ -142,6 +143,10 @@ export function LibraryPanel(): React.JSX.Element {
         onClick={() => openBlockDialog({ mode: 'create' })}
       >
         <PackagePlus size={14} /> Salvar seleção como bloco
+      </button>
+
+      <button type="button" className="btn btn--sm btn--block library__save" onClick={() => void importModelBlock()}>
+        <Box size={14} /> Importar modelo 3D (.glb)…
       </button>
 
       {placingBlockId && (

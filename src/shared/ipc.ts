@@ -18,6 +18,7 @@ export const IPC = {
   loadLibrary: 'library:load',
   saveLibrary: 'library:save',
   importImage: 'image:import',
+  importModel: 'model:import',
   loadAssets: 'assets:load',
   savePdf: 'pdf:save',
   aiStatus: 'ai:status',
@@ -93,6 +94,14 @@ export interface ImportedImage {
   dataUrl: string
 }
 
+/** Modelo 3D escolhido pelo usuário (.glb), já validado no main. */
+export interface ImportedModel {
+  /** Nome do arquivo sem extensão. */
+  name: string
+  /** Conteúdo em base64. */
+  data: string
+}
+
 /** 'offline' = gerador procedural local: sem IA, sem chave, sem internet e sem custo. */
 export type AiProvider = 'offline' | 'anthropic' | 'openai'
 
@@ -159,6 +168,8 @@ export interface PlanKraftApi {
   saveLibrary(data: BlockLibraryFile): Promise<boolean>
   /** Diálogo nativo para escolher a imagem de fundo. null = cancelado. */
   importImage(): Promise<ImportedImage | null>
+  /** Abre o diálogo nativo e lê um modelo .glb. null = cancelado. */
+  importModel(): Promise<ImportedModel | null>
   /** Lê as imagens da pasta assets/ de um projeto aberto. */
   loadAssets(projectPath: string, keys: string[]): Promise<AssetData[]>
   /** Diálogo "Salvar como" + gravação do PDF. null = cancelado. */

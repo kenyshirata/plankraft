@@ -82,6 +82,18 @@ export interface StairPiece {
   height: number
 }
 
+/** Bloco com modelo 3D (.glb): posição, giro e pegada final em metros. */
+export interface ModelPiece {
+  key: string
+  def: BlockDef
+  position: [number, number, number]
+  rotationY: number
+  /** Largura (X) e profundidade (Z) finais, já com a escala da instância. */
+  dims: [number, number]
+  flipX: boolean
+  flipY: boolean
+}
+
 export type RoofType = 'off' | 'flat' | 'gable' | 'hip'
 
 export interface RoofPiece {
@@ -90,6 +102,7 @@ export interface RoofPiece {
 }
 
 export interface Scene3D {
+  models: ModelPiece[]
   roof: RoofPiece | null
   stairs: StairPiece[]
   /** Cotas (m) dos pisos dos andares. */
@@ -158,6 +171,41 @@ const STYLES: Record<string, FurnitureStyle> = {
   'builtin:garden-chair': { base: 0.45, byIndex: [0.45, 0.85], color: '#a3b48f' },
   'builtin:lounger': { base: 0.35, color: '#a3b48f' },
   'builtin:bbq': { base: 0.9, detail: 0.92, color: '#8d8f93' },
+  'builtin:sofa-l': { base: 0.42, detail: 0.5, color: '#8ea3c4' },
+  'builtin:puff': { base: 0.4, detail: 0.42, color: '#c98f7a' },
+  'builtin:side-table': { base: 0.5, detail: 0.52, color: '#b8946b' },
+  'builtin:bookshelf': { base: 1.8, color: '#9b7b5a' },
+  'builtin:sideboard': { base: 0.85, color: '#9b7b5a' },
+  'builtin:rug': { base: 0.015, detail: 0.016, color: '#c9b8a2' },
+  'builtin:piano': { base: 1.3, detail: 1.34, color: '#2f3238' },
+  'builtin:fireplace': { base: 1.1, detail: 0.3, color: '#a39a8c' },
+  'builtin:plant-pot': { base: 0.5, detail: 0.55, color: '#6aa84f' },
+  'builtin:floor-lamp': { base: 1.6, detail: 1.62, color: '#d9d3c9' },
+  'builtin:dining-8': { base: 0.75, detail: 0.45, color: '#b8946b' },
+  'builtin:bunk-bed': { base: 1.6, byIndex: [1.6, 1.62], detail: 1.65, color: '#e9e2d4' },
+  'builtin:crib': { base: 0.9, detail: 0.5, color: '#e9e2d4' },
+  'builtin:dresser': { base: 0.9, color: '#b08d67' },
+  'builtin:vanity': { base: 0.78, detail: 0.8, color: '#b8946b' },
+  'builtin:chest': { base: 0.5, color: '#b08d67' },
+  'builtin:kitchen-island': { base: 0.9, detail: 0.92, color: '#d9dde2' },
+  'builtin:washer': { base: 0.85, detail: 0.86, color: '#e4e7ea' },
+  'builtin:dishwasher': { base: 0.85, detail: 0.86, color: '#e4e7ea' },
+  'builtin:counter': { base: 0.9, color: '#d9dde2' },
+  'builtin:pantry': { base: 2.1, color: '#e4e7ea' },
+  'builtin:cooktop-island': { base: 0.9, detail: 0.92, color: '#c9ced4' },
+  'builtin:double-sink': { base: 0.85, detail: 0.86, color: '#f4f6f8' },
+  'builtin:bidet': { base: 0.4, detail: 0.41, color: '#f4f6f8' },
+  'builtin:laundry-tub': { base: 0.9, detail: 0.5, color: '#f4f6f8' },
+  'builtin:desk-l': { base: 0.75, detail: 0.45, color: '#b8946b' },
+  'builtin:office-chair': { base: 0.5, detail: 0.9, color: '#454a55' },
+  'builtin:file-cabinet': { base: 0.7, color: '#9aa1ab' },
+  'builtin:shelf-office': { base: 1.8, color: '#9b7b5a' },
+  'builtin:bicycle': { base: 0.05, detail: 1.0, color: '#454a55' },
+  'builtin:motorcycle': { base: 0.7, detail: 0.5, color: '#454a55' },
+  'builtin:treadmill': { base: 1.1, detail: 1.25, color: '#454a55' },
+  'builtin:aquarium': { base: 0.6, detail: 0.55, color: '#9ec9e8' },
+  'builtin:wardrobe-wide': { base: 2.1, color: '#b08d67' },
+  'builtin:planter': { base: 0.5, detail: 0.55, color: '#8d6b4a' },
   'builtin:garden-bench': { base: 0.45, detail: 0.85, color: '#a8794a' },
   'builtin:car': { base: 1.0, byIndex: [1.0, 1.35, 1.1, 1.0, 1.0, 0.1, 0.1], color: '#7d8fa3' },
   'builtin:pillar-rect': { base: 2.7, color: '#cfcac2' },
@@ -241,6 +289,7 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   const furniture: FurniturePiece[] = []
   const images: ImagePiece[] = []
   const stairs: StairPiece[] = []
+  const models: ModelPiece[] = []
   let roofBase = 0
   let roofBox: { x0: number; z0: number; x1: number; z1: number } | null = null
 
@@ -433,6 +482,21 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   for (const b of objects.filter((o): o is BlockObject => o.type === 'block')) {
     const def = opts.resolveBlock(b.blockId)
     if (!def) continue
+    if (def.model) {
+      // Modelo 3D do usuário: renderizado pelo visualizador (carregamento assíncrono); aqui só a pegada.
+      const c = apply(instanceMatrix(b, def), { x: def.width / 2, y: def.height / 2 })
+      models.push({
+        key: b.id,
+        def,
+        position: [c.x * M, yOff, c.y * M],
+        rotationY: (-b.rotation * Math.PI) / 180,
+        dims: [def.width * Math.abs(b.scaleX) * M, def.height * Math.abs(b.scaleY) * M],
+        flipX: b.flipX,
+        flipY: b.flipY
+      })
+      pts2d.push(...stairQuad(b, def))
+      continue
+    }
     if (def.id === 'builtin:tree' || def.id === 'builtin:tree-small' || def.id === 'builtin:shrub') {
       // Vegetação: tronco + copa esférica, no tamanho do símbolo (escala incluída).
       const c = apply(instanceMatrix(b, def), { x: def.width / 2, y: def.height / 2 })
@@ -522,6 +586,7 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   const minZ = empty ? -4 : Math.min(...zs)
   const maxZ = empty ? 4 : Math.max(...zs)
   return {
+    models,
     roof: opts.roof && opts.roof !== 'off' && opts.cutHeight === null && roofBox ? buildRoof(opts.roof, roofBox, roofBase) : null,
     stairs,
     levelElevations: doc.levels.map((l) => l.elevation * M),

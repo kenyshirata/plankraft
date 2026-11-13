@@ -21,6 +21,7 @@ import { formatNumber } from '@renderer/lib/format'
 import { toast } from '@renderer/store/toastStore'
 import { buildScene, type Scene3D } from './buildScene'
 import { blockers, EYE_HEIGHT, stepWalker, type Walker } from './walk'
+import { loadModel, type LoadedModel } from './models'
 import { resolveMaterial } from '@shared/materials'
 import { getTileCanvas } from '@renderer/lib/textures'
 
@@ -323,6 +324,10 @@ function SceneContent({
         <BoxMesh key={i} b={b} />
       ))}
 
+      {scene.models.map((m) => (
+        <ModelMesh key={m.key} m={m} />
+      ))}
+
       {scene.furniture.map((f, i) => (
         <mesh key={i} geometry={f.geometry} castShadow receiveShadow>
           <meshStandardMaterial color={f.color} roughness={0.7} />
@@ -561,4 +566,43 @@ function WalkRig({ scene, start, onExit, onLeave }: { scene: Scene3D; start: Wal
     if (import.meta.env.DEV) (window as unknown as { __walk: unknown }).__walk = { ...me.current, yaw: l.yaw, eye: eye.current }
   })
   return null
+}
+
+// --------------------------------------------------------------- modelos 3D dos blocos
+
+/** Modelo .glb de um bloco, ajustado à pegada da instância (carrega de forma assíncrona). */
+function ModelMesh({ m }: { m: Scene3D['models'][number] }): React.JSX.Element | null {
+  const [loaded, setLoaded] = useState<LoadedModel | null>(null)
+  const len = m.def.model?.data.length ?? 0
+  useEffect(() => {
+    let alive = true
+    loadModel(m.def)
+      .then((l) => alive && setLoaded(l))
+      .catch(() => alive && setLoaded(null))
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [m.def.id, len])
+  const obj = useMemo(() => {
+    if (!loaded) return null
+    const g = loaded.scene.clone(true)
+    g.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (mesh.isMesh) {
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+      }
+    })
+    return g
+  }, [loaded])
+  if (!obj || !loaded) return null
+  const sx = m.dims[0] / Math.max(loaded.size.x, 1e-6)
+  const sz = m.dims[1] / Math.max(loaded.size.z, 1e-6)
+  const sy = (sx + sz) / 2
+  return (
+    <group position={m.position} rotation-y={m.rotationY} scale={[sx * (m.flipX ? -1 : 1), sy, sz * (m.flipY ? -1 : 1)]}>
+      <primitive object={obj} />
+    </group>
+  )
 }

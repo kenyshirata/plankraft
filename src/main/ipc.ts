@@ -4,6 +4,7 @@ import { registerProjectIpc } from './project'
 import { registerLibraryIpc } from './library'
 import { registerPdfIpc } from './pdf'
 import { registerAiIpc } from './ai'
+import { registerModelIpc } from './models'
 import { assertTrustedSender } from './security'
 
 export function registerIpcHandlers(): void {
@@ -21,4 +22,5 @@ export function registerIpcHandlers(): void {
   registerLibraryIpc()
   registerPdfIpc()
   registerAiIpc()
+  registerModelIpc()
 }

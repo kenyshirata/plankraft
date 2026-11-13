@@ -29,6 +29,18 @@ export type BlockShape =
   | (ShapeBase & { kind: 'arc'; cx: number; cy: number; r: number; start: number; end: number })
   | (ShapeBase & { kind: 'text'; x: number; y: number; text: string; size: number; rotation?: number; align?: 'left' | 'center' })
 
+/** Modelo 3D (glTF binário, .glb) embutido no bloco, para aparecer em volume na maquete. */
+export interface BlockModel {
+  /** Conteúdo do .glb em base64. */
+  data: string
+  /** Tamanho original do modelo (m): largura (X), altura (Y) e profundidade (Z). */
+  size: [number, number, number]
+}
+
+/** Limite do .glb por bloco (bytes) e prefixo base64 do cabeçalho "glTF". */
+export const MAX_MODEL_BYTES = 3 * 1024 * 1024
+export const GLB_B64_PREFIX = 'Z2xURg'
+
 export interface BlockDef {
   /** 'builtin:…' para símbolos de fábrica; uuid para personalizados. */
   id: string
@@ -39,6 +51,8 @@ export interface BlockDef {
   width: number
   height: number
   shapes: BlockShape[]
+  /** Modelo 3D opcional (o símbolo 2D continua sendo a planta do móvel). */
+  model?: BlockModel
   builtin?: boolean
   /** Data de criação/alteração (personalizados). */
   updatedAt?: string
@@ -117,8 +131,17 @@ export function normalizeBlockDef(v: unknown): BlockDef | null {
     width: v.width,
     height: v.height,
     shapes,
+    model: normalizeModel(v.model),
     updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : undefined
   }
+}
+
+function normalizeModel(v: unknown): BlockModel | undefined {
+  if (!isRec(v) || typeof v.data !== 'string' || !Array.isArray(v.size) || v.size.length !== 3) return undefined
+  if (!v.data.startsWith(GLB_B64_PREFIX) || v.data.length > Math.ceil((MAX_MODEL_BYTES * 4) / 3) + 8) return undefined
+  const size = v.size as unknown[]
+  if (!size.every((n) => fin(n) && n > 0 && n < 10000)) return undefined
+  return { data: v.data, size: [size[0], size[1], size[2]] as [number, number, number] }
 }
 
 export function normalizeLibraryFile(v: unknown): BlockLibraryFile {
