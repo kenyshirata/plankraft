@@ -20,8 +20,8 @@ export interface ModelPart {
 
 /** Bloco com um modelo (`file`) ou composto por várias peças (`parts`). */
 export type ModelEntry =
-  | { file: string; yaw?: number; height?: number; parts?: undefined }
-  | { parts: ModelPart[]; file?: undefined; yaw?: undefined; height?: undefined }
+  | { file: string; yaw?: number; height?: number; /** Escala uniforme pelo menor lado (mantém as proporções do modelo). */ uniform?: boolean; parts?: undefined }
+  | { parts: ModelPart[]; file?: undefined; yaw?: undefined; height?: undefined; uniform?: undefined }
 
 /** Mesa de jantar: tampo + cadeiras nos dois lados maiores (frente das cadeiras para a mesa). */
 function diningSet(width: number, chairsX: number[]): ModelEntry {
@@ -37,6 +37,14 @@ export const BUILTIN_MODELS: Record<string, ModelEntry> = {
   'builtin:dining-4': diningSet(120, [37.5, 82.5]),
   'builtin:dining-6': diningSet(180, [37.5, 90.5, 143.5]),
   'builtin:dining-8': diningSet(240, [37.5, 90.5, 143.5, 196.5]),
+  'builtin:motorcycle': { file: 'motorcycle', uniform: true },
+  'builtin:bicycle': { file: 'bicycleLow', uniform: true },
+  'builtin:bbq': { file: 'stoneFirePit', uniform: true },
+  'builtin:fireplace': { file: 'masonryHeater', height: 1.4 },
+  'builtin:piano': { file: 'pianoUpright', height: 1.25 },
+  'builtin:aquarium': { file: 'aquariumTank', height: 1.0 },
+  'builtin:treadmill': { file: 'treadmillSimple', height: 1.4 },
+  'builtin:crib': { file: 'cribWood', height: 1.0 },
   'builtin:car': { file: 'sedan', yaw: 180, height: 1.5 },
   'builtin:tree': { file: 'tree_oak', height: 5 },
   'builtin:tree-small': { file: 'tree_small', height: 3 },

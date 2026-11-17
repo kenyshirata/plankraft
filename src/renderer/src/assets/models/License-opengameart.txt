@@ -1,0 +1,8 @@
+OpenGameArt — modelos CC0 usados
+
+- "fancy motorcycle" (autor: Teh_Bucket) — https://opengameart.org/content/fancy-motorcycle
+  License: CC0. Arquivo original: bike.obj. Convertido para .glb com cores nos materiais.
+- "32 Low Poly Models" (autor: Drummyfish) — https://opengameart.org/content/32-low-poly-models
+  License: CC0 1.0. Arquivo original: bicycle.obj. Convertido para .glb com uma cor.
+
+CC0: https://creativecommons.org/publicdomain/zero/1.0/

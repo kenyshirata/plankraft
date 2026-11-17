@@ -1,0 +1,9 @@
+Poly Haven — Stone Fire Pit e Scandinavian Masonry Heater
+https://polyhaven.com/a/stone_fire_pit
+https://polyhaven.com/a/scandinavian_masonry_heater
+
+License: CC0 (Creative Commons Zero)
+https://polyhaven.com/license
+
+Adaptação: textura de cor reduzida para 512 px e mapas de normal/rugosidade removidos
+(arquivo único .glb), para reduzir o tamanho no app.

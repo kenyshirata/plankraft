@@ -98,7 +98,7 @@ export interface ModelPiece {
   flipX: boolean
   flipY: boolean
   /** Modelo de fábrica (Kenney) no lugar do .glb do usuário: arquivo e giro extra (graus). */
-  builtin?: { file: string; yaw: number; height?: number }
+  builtin?: { file: string; yaw: number; height?: number; uniform?: boolean }
 }
 
 export type RoofType = 'off' | 'flat' | 'gable' | 'hip'
@@ -584,7 +584,7 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
         dims: [def.width * Math.abs(b.scaleX) * M, def.height * Math.abs(b.scaleY) * M],
         flipX: b.flipX,
         flipY: b.flipY,
-        builtin: bm?.file ? { file: bm.file, yaw: bm.yaw ?? 0, height: bm.height ? bm.height * ((Math.abs(b.scaleX) + Math.abs(b.scaleY)) / 2) : undefined } : undefined
+        builtin: bm?.file ? { file: bm.file, yaw: bm.yaw ?? 0, uniform: bm.uniform, height: bm.height ? bm.height * ((Math.abs(b.scaleX) + Math.abs(b.scaleY)) / 2) : undefined } : undefined
       })
       pts2d.push(...stairQuad(b, def))
       continue
