@@ -98,7 +98,7 @@ export interface ModelPiece {
   flipX: boolean
   flipY: boolean
   /** Modelo de fábrica (Kenney) no lugar do .glb do usuário: arquivo e giro extra (graus). */
-  builtin?: { file: string; yaw: number }
+  builtin?: { file: string; yaw: number; height?: number }
 }
 
 export type RoofType = 'off' | 'flat' | 'gable' | 'hip'
@@ -554,6 +554,25 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
     const def = opts.resolveBlock(b.blockId)
     if (!def) continue
     const bm = opts.detailedModels !== false && !def.model ? BUILTIN_MODELS[def.id] : undefined
+    if (bm?.parts) {
+      // Bloco composto (ex.: mesa de jantar = tampo + cadeiras): uma peça de modelo por parte.
+      const m = instanceMatrix(b, def)
+      bm.parts.forEach((part, i) => {
+        const c = apply(m, { x: part.x, y: part.y })
+        models.push({
+          key: `${b.id}#${i}`,
+          def,
+          position: [c.x * M, yOff, c.y * M],
+          rotationY: (-b.rotation * Math.PI) / 180,
+          dims: [part.w * Math.abs(b.scaleX) * M, part.d * Math.abs(b.scaleY) * M],
+          flipX: false,
+          flipY: false,
+          builtin: { file: part.file, yaw: (part.yaw ?? 0) + (b.flipY ? 180 : 0), height: part.height ? part.height * ((Math.abs(b.scaleX) + Math.abs(b.scaleY)) / 2) : undefined }
+        })
+      })
+      pts2d.push(...stairQuad(b, def))
+      continue
+    }
     if (def.model || bm) {
       // Modelo 3D (do usuário ou de fábrica): renderizado pelo visualizador (carregamento assíncrono); aqui só a pegada.
       const c = apply(instanceMatrix(b, def), { x: def.width / 2, y: def.height / 2 })
@@ -565,7 +584,7 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
         dims: [def.width * Math.abs(b.scaleX) * M, def.height * Math.abs(b.scaleY) * M],
         flipX: b.flipX,
         flipY: b.flipY,
-        builtin: bm ? { file: bm.file, yaw: bm.yaw ?? 0 } : undefined
+        builtin: bm?.file ? { file: bm.file, yaw: bm.yaw ?? 0, height: bm.height ? bm.height * ((Math.abs(b.scaleX) + Math.abs(b.scaleY)) / 2) : undefined } : undefined
       })
       pts2d.push(...stairQuad(b, def))
       continue

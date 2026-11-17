@@ -6,7 +6,51 @@
 import { parseGlb, type LoadedModel } from './models'
 
 /** id do bloco → arquivo (sem extensão) e giro extra (graus) para a frente do modelo coincidir com a do símbolo. */
-export const BUILTIN_MODELS: Record<string, { file: string; yaw?: number }> = {
+export interface ModelPart {
+  file: string
+  /** Centro e tamanho da peça no sistema do símbolo (cm, antes da escala da instância). */
+  x: number
+  y: number
+  w: number
+  d: number
+  yaw?: number
+  /** Altura final (m); ausente = média da escala em largura e profundidade. */
+  height?: number
+}
+
+/** Bloco com um modelo (`file`) ou composto por várias peças (`parts`). */
+export type ModelEntry =
+  | { file: string; yaw?: number; height?: number; parts?: undefined }
+  | { parts: ModelPart[]; file?: undefined; yaw?: undefined; height?: undefined }
+
+/** Mesa de jantar: tampo + cadeiras nos dois lados maiores (frente das cadeiras para a mesa). */
+function diningSet(width: number, chairsX: number[]): ModelEntry {
+  const parts: ModelPart[] = [{ file: 'table', x: width / 2, y: 80, w: width, d: 90, height: 0.75 }]
+  for (const x of chairsX) {
+    parts.push({ file: 'chair', x, y: 22.5, w: 45, d: 45, height: 0.9 })
+    parts.push({ file: 'chair', x, y: 137.5, w: 45, d: 45, yaw: 180, height: 0.9 })
+  }
+  return { parts }
+}
+
+export const BUILTIN_MODELS: Record<string, ModelEntry> = {
+  'builtin:dining-4': diningSet(120, [37.5, 82.5]),
+  'builtin:dining-6': diningSet(180, [37.5, 90.5, 143.5]),
+  'builtin:dining-8': diningSet(240, [37.5, 90.5, 143.5, 196.5]),
+  'builtin:car': { file: 'sedan', yaw: 180, height: 1.5 },
+  'builtin:tree': { file: 'tree_oak', height: 5 },
+  'builtin:tree-small': { file: 'tree_small', height: 3 },
+  'builtin:shrub': { file: 'plant_bushLarge', height: 0.8 },
+  'builtin:planter': { file: 'pot_large', height: 0.45 },
+  'builtin:garden-bench': { file: 'bench', height: 0.85 },
+  'builtin:lounger': { file: 'loungeChairRelax', height: 0.9 },
+  'builtin:dishwasher': { file: 'dryer' },
+  'builtin:bidet': { file: 'toiletSquare' },
+  'builtin:laundry-tub': { file: 'bathroomSinkSquare' },
+  'builtin:vanity': { file: 'sideTableDrawers' },
+  'builtin:chest': { file: 'benchCushionLow' },
+  'builtin:pantry': { file: 'bookcaseClosedDoors' },
+  'builtin:file-cabinet': { file: 'cabinetBedDrawer' },
   'builtin:sofa-3': { file: 'loungeSofaLong' },
   'builtin:sofa-2': { file: 'loungeSofa' },
   'builtin:armchair': { file: 'loungeChair' },

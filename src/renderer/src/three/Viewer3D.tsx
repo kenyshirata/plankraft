@@ -714,7 +714,7 @@ function ModelMesh({ m }: { m: Scene3D['models'][number] }): React.JSX.Element |
   if (!obj || !loaded) return null
   const sx = m.dims[0] / Math.max(loaded.size.x, 1e-6)
   const sz = m.dims[1] / Math.max(loaded.size.z, 1e-6)
-  const sy = (sx + sz) / 2
+  const sy = m.builtin?.height ? m.builtin.height / Math.max(loaded.size.y, 1e-6) : (sx + sz) / 2
   return (
     <group position={m.position} rotation-y={m.rotationY + ((m.builtin?.yaw ?? 0) * Math.PI) / 180} scale={[sx * (m.flipX ? -1 : 1), sy, sz * (m.flipY ? -1 : 1)]}>
       <primitive object={obj} />
