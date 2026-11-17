@@ -11,7 +11,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { Box, Clock, Eye, Footprints, Globe, ImageDown, Layers2, Maximize, Scissors, Sun, Tag, X } from 'lucide-react'
+import { Armchair, Box, Clock, Eye, Footprints, Globe, ImageDown, Layers2, Maximize, Scissors, Sun, Tag, X } from 'lucide-react'
 import { useEditorStore } from '@renderer/store/editorStore'
 import { useSettingsStore } from '@renderer/store/settingsStore'
 import { useAssetStore } from '@renderer/store/assetStore'
@@ -22,6 +22,7 @@ import { toast } from '@renderer/store/toastStore'
 import { buildScene, type Scene3D } from './buildScene'
 import { blockers, EYE_HEIGHT, stepWalker, type Walker } from './walk'
 import { loadModel, type LoadedModel } from './models'
+import { loadBuiltinModel } from './builtinModels'
 import { formatHour, sunState } from './sun'
 import { renderImage, renderPanorama } from './capture'
 import { resolveMaterial } from '@shared/materials'
@@ -68,10 +69,11 @@ export default function Viewer3D(): React.JSX.Element {
         cutHeight: s.cutaway3d && !walk ? 1.2 : null,
         includeImages: s.background3d,
         roof: s.roof3d,
+        detailedModels: s.detailModels3d,
         resolveBlock: (id) => resolveBlock(id, doc),
         image: (key) => assets[key]?.image ?? null
       }),
-    [doc, assets, s.wallHeight3d, s.cutaway3d, s.background3d, s.roof3d, walk]
+    [doc, assets, s.wallHeight3d, s.cutaway3d, s.background3d, s.roof3d, s.detailModels3d, walk]
   )
 
   // Libera as geometrias antigas quando a cena é reconstruída.
@@ -215,6 +217,15 @@ export default function Viewer3D(): React.JSX.Element {
           onClick={() => s.toggle('cutaway3d')}
         >
           <Scissors size={16} />
+        </button>
+        <button
+          type="button"
+          className={`icon-btn icon-btn--sm${s.detailModels3d ? ' is-on' : ''}`}
+          aria-pressed={s.detailModels3d}
+          data-tooltip="Móveis detalhados (modelos 3D)"
+          onClick={() => s.toggle('detailModels3d')}
+        >
+          <Armchair size={16} />
         </button>
         <button
           type="button"
@@ -681,14 +692,13 @@ function ModelMesh({ m }: { m: Scene3D['models'][number] }): React.JSX.Element |
   const len = m.def.model?.data.length ?? 0
   useEffect(() => {
     let alive = true
-    loadModel(m.def)
-      .then((l) => alive && setLoaded(l))
-      .catch(() => alive && setLoaded(null))
+    const pending = m.builtin ? loadBuiltinModel(m.builtin.file) : loadModel(m.def)
+    pending.then((l) => alive && setLoaded(l)).catch(() => alive && setLoaded(null))
     return () => {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m.def.id, len])
+  }, [m.def.id, len, m.builtin?.file])
   const obj = useMemo(() => {
     if (!loaded) return null
     const g = loaded.scene.clone(true)
@@ -706,7 +716,7 @@ function ModelMesh({ m }: { m: Scene3D['models'][number] }): React.JSX.Element |
   const sz = m.dims[1] / Math.max(loaded.size.z, 1e-6)
   const sy = (sx + sz) / 2
   return (
-    <group position={m.position} rotation-y={m.rotationY} scale={[sx * (m.flipX ? -1 : 1), sy, sz * (m.flipY ? -1 : 1)]}>
+    <group position={m.position} rotation-y={m.rotationY + ((m.builtin?.yaw ?? 0) * Math.PI) / 180} scale={[sx * (m.flipX ? -1 : 1), sy, sz * (m.flipY ? -1 : 1)]}>
       <primitive object={obj} />
     </group>
   )

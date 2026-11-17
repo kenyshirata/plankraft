@@ -17,6 +17,7 @@ import type { BlockDef, BlockShape } from '@shared/blocks'
 import { WINDOW_HEIGHT_DEFAULT, WINDOW_SILL_DEFAULT } from '@shared/model'
 import { ZONES } from '@shared/zones'
 import { parseStairId, stairLayout } from '@shared/stairs'
+import { BUILTIN_MODELS } from './builtinModels'
 import type { RoomZone } from '@shared/model'
 import type { BlockObject, DoorObject, Id, ImageObject, OpeningObject, PlanDocument, RoomObject, WallObject, WindowObject } from '@shared/model'
 import { distance, normalize, perp, pointInPolygon, polygonArea, polygonCentroid, sub } from '@renderer/lib/geometry'
@@ -96,6 +97,8 @@ export interface ModelPiece {
   dims: [number, number]
   flipX: boolean
   flipY: boolean
+  /** Modelo de fábrica (Kenney) no lugar do .glb do usuário: arquivo e giro extra (graus). */
+  builtin?: { file: string; yaw: number }
 }
 
 export type RoofType = 'off' | 'flat' | 'gable' | 'hip'
@@ -126,6 +129,8 @@ export interface SceneOptions {
   /** Corte: paredes limitadas a esta altura (vista "maquete aberta"). */
   cutHeight: number | null
   includeImages: boolean
+  /** Usa os modelos 3D de fábrica dos blocos (padrão: sim). */
+  detailedModels?: boolean
   /** Telhado simples sobre o contorno do último andar (omitido na vista cortada). */
   roof?: RoofType
   resolveBlock(id: string): BlockDef | undefined
@@ -548,8 +553,9 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
   for (const b of objects.filter((o): o is BlockObject => o.type === 'block')) {
     const def = opts.resolveBlock(b.blockId)
     if (!def) continue
-    if (def.model) {
-      // Modelo 3D do usuário: renderizado pelo visualizador (carregamento assíncrono); aqui só a pegada.
+    const bm = opts.detailedModels !== false && !def.model ? BUILTIN_MODELS[def.id] : undefined
+    if (def.model || bm) {
+      // Modelo 3D (do usuário ou de fábrica): renderizado pelo visualizador (carregamento assíncrono); aqui só a pegada.
       const c = apply(instanceMatrix(b, def), { x: def.width / 2, y: def.height / 2 })
       models.push({
         key: b.id,
@@ -558,7 +564,8 @@ export function buildScene(doc: PlanDocument, opts: SceneOptions): Scene3D {
         rotationY: (-b.rotation * Math.PI) / 180,
         dims: [def.width * Math.abs(b.scaleX) * M, def.height * Math.abs(b.scaleY) * M],
         flipX: b.flipX,
-        flipY: b.flipY
+        flipY: b.flipY,
+        builtin: bm ? { file: bm.file, yaw: bm.yaw ?? 0 } : undefined
       })
       pts2d.push(...stairQuad(b, def))
       continue
